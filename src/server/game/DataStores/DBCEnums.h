@@ -135,7 +135,7 @@ enum AreaFlags
     AREA_FLAG_OUTSIDE               = 0x04000000,                // used for determinating spell related inside/outside questions in Map::IsOutdoors
     AREA_FLAG_CAN_HEARTH_AND_RESURRECT = 0x08000000,             // Can Hearth And Resurrect From Area
     AREA_FLAG_NO_FLY_ZONE           = 0x20000000,                // Marks zones where you cannot fly
-    AREA_FLAG_UNK9                  = 0x40000000
+    AREA_FLAG_SUB_ZONE              = 0x40000000,                // Usef for all the sub-zones (mostly when parent != 0)
 };
 
 enum AreaFlags2
@@ -151,6 +151,12 @@ enum AreaMountFlags
     AREA_MOUNT_FLAG_UNDERWATER_ALLOWED  = 0x8
 };
 
+enum ArtifactCategory : uint32
+{
+    ARTIFACT_CATEGORY_PRIMARY = 1,
+    ARTIFACT_CATEGORY_FISHING = 2
+};
+
 enum ArtifactPowerFlag : uint8
 {
     ARTIFACT_POWER_FLAG_GOLD                        = 0x01,
@@ -162,6 +168,8 @@ enum ArtifactPowerFlag : uint8
 
     ARTIFACT_POWER_FLAG_FIRST                       = ARTIFACT_POWER_FLAG_NO_LINK_REQUIRED | ARTIFACT_POWER_FLAG_DONT_COUNT_FIRST_BONUS_RANK,
 };
+
+#define MAX_ARTIFACT_TIER 1
 
 #define BATTLE_PET_SPECIES_MAX_ID 2164
 
@@ -679,6 +687,55 @@ enum FactionMasks
 #define MAX_ITEM_PROTO_SOCKETS 3
 #define MAX_ITEM_PROTO_STATS  10
 
+// LockType.dbc (8.0.1)
+enum LockType
+{
+    LOCKTYPE_PICKLOCK               = 1,
+    LOCKTYPE_HERBALISM_1            = 2,
+    LOCKTYPE_MINING_1               = 3,
+    LOCKTYPE_DISARM_TRAP            = 4,
+    LOCKTYPE_OPEN                   = 5,
+    LOCKTYPE_TREASURE               = 6,
+    LOCKTYPE_CALCIFIED_ELVEN_GEMS   = 7,
+    LOCKTYPE_CLOSE                  = 8,
+    LOCKTYPE_ARM_TRAP               = 9,
+    LOCKTYPE_QUICK_OPEN             = 10,
+    LOCKTYPE_QUICK_CLOSE            = 11,
+    LOCKTYPE_OPEN_TINKERING         = 12,
+    LOCKTYPE_OPEN_KNEELING          = 13,
+    LOCKTYPE_OPEN_ATTACKING         = 14,
+    LOCKTYPE_GAHZRIDIAN             = 15,
+    LOCKTYPE_BLASTING               = 16,
+    LOCKTYPE_SLOW_OPEN              = 17,
+    LOCKTYPE_SLOW_CLOSE             = 18,
+    LOCKTYPE_FISHING                = 19,
+    LOCKTYPE_INSCRIPTION            = 20,
+    LOCKTYPE_OPEN_FROM_VEHICLE      = 21,
+    LOCKTYPE_ARCHAELOGY             = 22,
+    LOCKTYPE_PVP_OPEN_FAST          = 23,
+    LOCKTYPE_LUMBER_MILL            = 28,
+    LOCKTYPE_SKINNING_1             = 29,
+    LOCKTYPE_ANCIENT_MANA           = 30,
+    LOCKTYPE_WARBOARD               = 31,
+    LOCKTYPE_HERBALISM_2            = 32,
+    LOCKTYPE_HERBALISM_3            = 33,
+    LOCKTYPE_HERBALISM_4            = 34,
+    LOCKTYPE_HERBALISM_5            = 35,
+    LOCKTYPE_HERBALISM_6            = 36,
+    LOCKTYPE_HERBALISM_7            = 37,
+    LOCKTYPE_HERBALISM_8            = 38,
+    LOCKTYPE_HERBALISM_9            = 39,
+    LOCKTYPE_MINING_2               = 40,
+    LOCKTYPE_MINING_3               = 41,
+    LOCKTYPE_MINING_4               = 42,
+    LOCKTYPE_MINING_5               = 43,
+    LOCKTYPE_MINING_6               = 44,
+    LOCKTYPE_MINING_7               = 45,
+    LOCKTYPE_MINING_8               = 46,
+    LOCKTYPE_MINING_9               = 47,
+    LOCKTYPE_SKINNING_2             = 48,
+};
+
 enum MapTypes                                               // Lua_IsInInstance
 {
     MAP_COMMON          = 0,                                // none
@@ -840,6 +897,20 @@ enum ItemContext : uint8
 
     Event           = 9,
     TimeWalker      = 22,
+};
+
+enum JournalEncounterFlags : uint8
+{
+    JOURNAL_ENCOUNTER_FLAG_UNK2     = 0x02,
+    JOURNAL_ENCOUNTER_FLAG_ALLIANCE = 0x04, // This encounter can be see by alliance only
+    JOURNAL_ENCOUNTER_FLAG_HORDE    = 0x08,
+    JOURNAL_ENCOUNTER_FLAG_LEGION_WB= 0x16,
+};
+
+enum LfgDungeons : uint32
+{
+    LFG_DUNGEON_TIME_WALKING_BLACK_TEMPLE   = 1533,
+    LFG_DUNGEON_TIME_WALKING_ULDUAR         = 1677
 };
 
 enum MapDifficultyFlags : uint8
@@ -1099,19 +1170,58 @@ enum VehicleSeatFlagsB
 // CurrencyTypes.dbc
 enum CurrencyTypes
 {
-    CURRENCY_TYPE_ARCHAEOLOGY_DWARF     = 384,
-    CURRENCY_TYPE_ARCHAEOLOGY_TROLL     = 385,
-    CURRENCY_TYPE_ARCHAEOLOGY_FOSSIL    = 393,
-    CURRENCY_TYPE_ARCHAEOLOGY_NIGHT_ELF = 394,
-    CURRENCY_TYPE_JUSTICE_POINTS        = 395,
-    CURRENCY_TYPE_VALOR_POINTS          = 396,
-    CURRENCY_TYPE_ARCHAEOLOGY_ORC       = 397,
-    CURRENCY_TYPE_ARCHAEOLOGY_DRAENEI   = 398,
-    CURRENCY_TYPE_ARCHAEOLOGY_VRYKUL    = 399,
-    CURRENCY_TYPE_ARCHAEOLOGY_NERUBIAN  = 400,
-    CURRENCY_TYPE_ARCHAEOLOGY_TOLVIR    = 401,
-    CURRENCY_TYPE_APEXIS_CRYSTALS       = 823,
-    CURRENCY_TYPE_ARTIFACT_KNOWLEDGE    = 1171,
+    CURRENCY_TYPE_DALARAN_JEWEL                     = 61,
+    CURRENCY_TYPE_EPICUREAN                         = 81,
+    CURRENCY_TYPE_CHAMPION_SEAL                     = 241,
+    CURRENCY_TYPE_ILLUSTROUS_JEWEL                  = 361,
+    CURRENCY_TYPE_ARCHAEOLOGY_DWARF                 = 384,
+    CURRENCY_TYPE_ARCHAEOLOGY_TROLL                 = 385,
+    CURRENCY_TYPE_CONQUEST_POINTS                   = 390,
+    CURRENCY_TYPE_TOL_BARAD                         = 391,
+    CURRENCY_TYPE_HONOR_POINTS                      = 392,
+    CURRENCY_TYPE_ARCHAEOLOGY_FOSSIL                = 393,
+    CURRENCY_TYPE_ARCHAEOLOGY_NIGHT_ELF             = 394,
+    CURRENCY_TYPE_JUSTICE_POINTS                    = 395,
+    CURRENCY_TYPE_VALOR_POINTS                      = 396,
+    CURRENCY_TYPE_ARCHAEOLOGY_ORC                   = 397,
+    CURRENCY_TYPE_ARCHAEOLOGY_DRAENEI               = 398,
+    CURRENCY_TYPE_ARCHAEOLOGY_VRYKUL                = 399,
+    CURRENCY_TYPE_ARCHAEOLOGY_NERUBIAN              = 400,
+    CURRENCY_TYPE_ARCHAEOLOGY_TOLVIR                = 401,
+    CURRENCY_TYPE_IRONPAW                           = 402,
+    CURRENCY_TYPE_WORLD_TREE                        = 416,
+    CURRENCY_TYPE_CONQUEST_META_ARENA_BG            = 483,
+    CURRENCY_TYPE_CONQUEST_META_RBG                 = 484,
+    CURRENCY_TYPE_DARKMOON_TICKET                   = 515,
+    CURRENCY_TYPE_MOTE_OF_DARKNESS                  = 614,
+    CURRENCY_TYPE_CORRUPTED_ESSENCE                 = 615,
+    CURRENCY_TYPE_ARCHAEOLOGY_PANDAREN              = 676,
+    CURRENCY_TYPE_ARCHAEOLOGY_MOGU                  = 677,
+    CURRENCY_TYPE_ELDER_CHARM_GOOD_FORTUNE          = 697,
+    CURRENCY_TYPE_ZEN_JEWEL                         = 698,
+    CURRENCY_TYPE_LESSER_CHARM_GOOD_FORTUNE         = 738,
+    CURRENCY_TYPE_MOGU_RUNE_FATE                    = 752,
+    CURRENCY_TYPE_ARCHAEOLOGY_MANTID                = 754,
+    CURRENCY_TYPE_WARFORGED_SEAL                    = 776,
+    CURRENCY_TYPE_TIMELESS_COIN                     = 777,
+    CURRENCY_TYPE_BLOODY_COIN                       = 789,
+    CURRENCY_TYPE_BLACK_IRON_FRAGEMENT              = 810,
+    CURRENCY_TYPE_DRAENOR_CLANS_ARCHAEOLOGY         = 821,
+    CURRENCY_TYPE_APEXIS_CRYSTALS                   = 823,
+    CURRENCY_TYPE_GARRISON_RESSOURCES               = 824,
+    CURRENCY_TYPE_OGRE_ARCHAEOLOGY_FRAGEMENT        = 828,
+    CURRENCY_TYPE_ARAKKOA_ARCHAEOLOGY               = 829,
+    CURRENCY_TYPE_UNUSED                            = 830,
+    CURRENCY_TYPE_UNUSED_2                          = 897,
+    CURRENCY_TYPE_SECRET_OF_DRAENOR_ALCHEMY         = 910,
+    CURRENCY_TYPE_ARTIFACT_FRAGEMENT                = 944,
+    CURRENCY_TYPE_DINGY_IRON_COINS                  = 980,
+    CURRENCY_TYPE_SEAL_OF_TEMPERED_FATE             = 994,
+    CURRENCY_TYPE_SECRET_OF_DRAENOR_TAILORING       = 999,
+    CURRENCY_TYPE_SECRET_OF_DRAENOR_JEWELCRAFTING   = 1008,
+    CURRENCY_TYPE_SECRET_OF_DRAENOR_LEATHERWORKING  = 1017,
+    CURRENCY_TYPE_SECRET_OF_DRAENOR_BLACKSMITHING   = 1020,
+    CURRENCY_TYPE_OIL                               = 1101,
 };
 
 enum WorldMapTransformsFlags

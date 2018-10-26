@@ -473,6 +473,7 @@ typedef std::unordered_map<uint32/*(mapid, spawnMode) pair*/, CellObjectGuidsMap
 
 // Trinity Trainer Reference start range
 #define TRINITY_TRAINER_START_REF      200000
+#define TRINITY_TRAINER_END_REF        1000000
 
 struct TrinityString
 {
@@ -488,6 +489,7 @@ struct ScriptParam
 typedef std::map<ObjectGuid, ObjectGuid> LinkedRespawnContainer;
 typedef std::unordered_map<uint32, CreatureTemplate> CreatureTemplateContainer;
 typedef std::unordered_map<uint32, CreatureAddon> CreatureTemplateAddonContainer;
+typedef std::unordered_map<uint32, uint32> CreatureTemplateJournalContainer;
 typedef std::unordered_map<ObjectGuid::LowType, CreatureData> CreatureDataContainer;
 typedef std::unordered_map<ObjectGuid::LowType, CreatureAddon> CreatureAddonContainer;
 typedef std::unordered_map<uint16, CreatureBaseStats> CreatureBaseStatsContainer;
@@ -958,6 +960,7 @@ class TC_GAME_API ObjectMgr
         void LoadGameObjectTemplateAddons();
 
         CreatureTemplate const* GetCreatureTemplate(uint32 entry) const;
+        uint32 GetCreatureTemplateJournalId(uint32 entry) const;
         CreatureTemplateContainer const* GetCreatureTemplates() const { return &_creatureTemplateStore; }
         CreatureModelInfo const* GetCreatureModelInfo(uint32 modelId) const;
         CreatureModelInfo const* GetCreatureModelRandomGender(uint32* displayID) const;
@@ -1197,6 +1200,7 @@ class TC_GAME_API ObjectMgr
         void LoadCreatureClassLevelStats();
         void LoadCreatureLocales();
         void LoadCreatureTemplates();
+        void LoadCreatureTemplateJournals();
         void LoadCreatureTemplateAddons();
         void LoadScriptParams();
         void LoadCreatureTemplate(Field* fields);
@@ -1744,6 +1748,7 @@ class TC_GAME_API ObjectMgr
         MapObjectGuids _mapObjectGuidsStore;
         CreatureDataContainer _creatureDataStore;
         CreatureTemplateContainer _creatureTemplateStore;
+        CreatureTemplateJournalContainer _creatureTemplateJournalStore;
         CreatureModelContainer _creatureModelStore;
         CreatureAddonContainer _creatureAddonStore;
         GameObjectAddonContainer _gameObjectAddonStore;

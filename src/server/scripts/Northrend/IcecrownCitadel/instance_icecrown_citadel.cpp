@@ -86,7 +86,7 @@ DoorData const doorData[] =
     {GO_DOODAD_ICECROWN_GRATE_01,            DATA_BLOOD_QUEEN_LANA_THEL, DOOR_TYPE_PASSAGE },
     {GO_GREEN_DRAGON_BOSS_ENTRANCE,          DATA_SISTER_SVALNA,         DOOR_TYPE_PASSAGE },
     {GO_GREEN_DRAGON_BOSS_ENTRANCE,          DATA_VALITHRIA_DREAMWALKER, DOOR_TYPE_ROOM },
-    {GO_GREEN_DRAGON_BOSS_EXIT,              DATA_VALITHRIA_DREAMWALKER, DOOR_TYPE_PASSAGE },
+    {GO_GREEN_DRAGON_BOSS_EXIT,              DATA_VALITHRIA_DREAMWALKER, DOOR_TYPE_ROOM },
     {GO_DOODAD_ICECROWN_ROOSTPORTCULLIS_01,  DATA_VALITHRIA_DREAMWALKER, DOOR_TYPE_SPAWN_HOLE },
     {GO_DOODAD_ICECROWN_ROOSTPORTCULLIS_02,  DATA_VALITHRIA_DREAMWALKER, DOOR_TYPE_SPAWN_HOLE },
     {GO_DOODAD_ICECROWN_ROOSTPORTCULLIS_03,  DATA_VALITHRIA_DREAMWALKER, DOOR_TYPE_SPAWN_HOLE },
@@ -247,7 +247,7 @@ class instance_icecrown_citadel : public InstanceMapScript
                         break;
                     case NPC_SE_HIGH_OVERLORD_SAURFANG:
                         if (TeamInInstance == ALLIANCE)
-                            creature->UpdateEntry(NPC_SE_MURADIN_BRONZEBEARD, creature->GetCreatureData());
+                            creature->UpdateEntry(NPC_SE_MURADIN_BRONZEBEARD, nullptr, true, true);
                         // no break;
                     case NPC_SE_MURADIN_BRONZEBEARD:
                         DeathbringerSaurfangEventGUID = creature->GetGUID();
@@ -372,7 +372,7 @@ class instance_icecrown_citadel : public InstanceMapScript
                         {
                             if (WeeklyQuestData[questIndex].creatureEntry == entry)
                             {
-                                uint8 diffIndex = uint8(instance->GetSpawnMode() & 1);
+                                uint8 diffIndex = instance->Is25ManRaid() ? 1 : 0;
                                 if (!sPoolMgr->IsSpawnedObject<Quest>(WeeklyQuestData[questIndex].questId[diffIndex]))
                                     return 0;
                                 break;
@@ -908,6 +908,10 @@ class instance_icecrown_citadel : public InstanceMapScript
                             else
                                 HandleGameObject(PutricideGateGUIDs[0], false);
                             HandleGameObject(PutricidePipeGUIDs[0], true);
+
+                            if (Creature* professorPutricide = instance->GetCreature(ProfessorPutricideGUID))
+                                if (professorPutricide->AI())
+                                    professorPutricide->AI()->DoAction(ACTION_CHECK_BOSS);
                         }
                         break;
                     case DATA_ROTFACE:
@@ -924,6 +928,10 @@ class instance_icecrown_citadel : public InstanceMapScript
                             else
                                 HandleGameObject(PutricideGateGUIDs[1], false);
                             HandleGameObject(PutricidePipeGUIDs[1], true);
+
+                            if (Creature* professorPutricide = instance->GetCreature(ProfessorPutricideGUID))
+                                if (professorPutricide->AI())
+                                    professorPutricide->AI()->DoAction(ACTION_CHECK_BOSS);
                         }
                         break;
                     case DATA_PROFESSOR_PUTRICIDE:
@@ -961,7 +969,7 @@ class instance_icecrown_citadel : public InstanceMapScript
                     case DATA_VALITHRIA_DREAMWALKER:
                         if (state == DONE)
                         {
-                            if (sPoolMgr->IsSpawnedObject<Quest>(WeeklyQuestData[8].questId[instance->GetSpawnMode() & 1]))
+                            if (sPoolMgr->IsSpawnedObject<Quest>(WeeklyQuestData[8].questId[instance->Is25ManRaid() ? 1 : 0]))
                                 instance->SummonCreature(NPC_VALITHRIA_DREAMWALKER_QUEST, ValithriaSpawnPos);
                             if (GameObject* teleporter = instance->GetGameObject(TeleporterSindragosaGUID))
                                 SetTeleporterState(teleporter, true);
@@ -1066,7 +1074,7 @@ class instance_icecrown_citadel : public InstanceMapScript
                             break;
 
                         // 5 is the index of Blood Quickening
-                        if (!sPoolMgr->IsSpawnedObject<Quest>(WeeklyQuestData[5].questId[instance->GetSpawnMode() & 1]))
+                        if (!sPoolMgr->IsSpawnedObject<Quest>(WeeklyQuestData[5].questId[instance->Is25ManRaid() ? 1 : 0]))
                             break;
 
                         switch (data)
@@ -1248,8 +1256,8 @@ class instance_icecrown_citadel : public InstanceMapScript
                             return false;
                         // no break
                     case DATA_SINDRAGOSA:
-                        if (GetBossState(DATA_VALITHRIA_DREAMWALKER) != DONE)
-                            return false;
+                        /*if (GetBossState(DATA_VALITHRIA_DREAMWALKER) != DONE)
+                            return false;*/
                         break;
                     default:
                         break;

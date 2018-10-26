@@ -276,10 +276,10 @@ class spell_rog_between_the_eyes :public SpellScript
 {
     PrepareSpellScript(spell_rog_between_the_eyes);
 
-    void HandleTakePower(Powers& power, int32& powerCount)
+    void HandleTakePower(SpellPowerCost& powerCost)
     {
-        if (power == POWER_COMBO_POINTS)
-            _cp = powerCount;
+        if (powerCost.Power == POWER_COMBO_POINTS)
+            _cp = powerCost.Amount;
     }
 
     void HandleAfterHit()
@@ -488,6 +488,33 @@ public:
     AuraScript* GetAuraScript() const override
     {
         return new spell_rog_roll_the_bones_AuraScript();
+    }
+
+    class spell_rog_roll_the_bones_duration_SpellScript : public SpellScript
+    {
+        PrepareSpellScript(spell_rog_roll_the_bones_duration_SpellScript);
+
+        bool Validate(SpellInfo const* /*spellInfo*/) override
+        {
+            return ValidateSpellInfo({ SPELL_ROGUE_ROLL_THE_BONES });
+        }
+
+        void HandleAfterHit()
+        {
+            if (Aura* rtbAura = GetCaster()->GetAura(GetSpellInfo()->Id))
+                if (SpellPowerCost const* powerCost = GetSpell()->GetPowerCost(POWER_COMBO_POINTS))
+                    rtbAura->SetDuration((powerCost->Amount + 1) * 6 * IN_MILLISECONDS);
+        }
+
+        void Register() override
+        {
+            AfterHit += SpellHitFn(spell_rog_roll_the_bones_duration_SpellScript::HandleAfterHit);
+        }
+    };
+
+    SpellScript* GetSpellScript() const override
+    {
+        return new spell_rog_roll_the_bones_duration_SpellScript();
     }
 };
 
@@ -1095,10 +1122,10 @@ class spell_rog_kidney_shot :public SpellScript
 {
     PrepareSpellScript(spell_rog_kidney_shot);
 
-    void HandleTakePower(Powers& power, int32& powerCount)
+    void HandleTakePower(SpellPowerCost& powerCost)
     {
-        if (power == POWER_COMBO_POINTS)
-            _cp = powerCount + 1;
+        if (powerCost.Power == POWER_COMBO_POINTS)
+            _cp = powerCost.Amount + 1;
     }
 
     void HandleAfterHit()
@@ -2557,6 +2584,9 @@ public:
                 return false;
 
             if (!roll_chance_i(6))
+                return false;
+
+            if (!eventInfo.GetDamageInfo())
                 return false;
 
             SpellNonMeleeDamage damageLog(caster, target, triggerSpell->Id, triggerSpell->GetSpellXSpellVisualId(), triggerSpell->SchoolMask);

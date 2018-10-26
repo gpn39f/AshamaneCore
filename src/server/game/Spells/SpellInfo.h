@@ -229,7 +229,7 @@ enum SpellAuraInterruptFlags : uint32
     AURA_INTERRUPT_FLAG_CAST                = 0x00000004,   // 2    cast any spells
     AURA_INTERRUPT_FLAG_MOVE                = 0x00000008,   // 3    removed by any movement
     AURA_INTERRUPT_FLAG_TURNING             = 0x00000010,   // 4    removed by any turning
-    AURA_INTERRUPT_FLAG_JUMP                = 0x00000020,   // 5    removed by entering combat
+    AURA_INTERRUPT_FLAG_JUMP                = 0x00000020,   // 5    removed by jumping
     AURA_INTERRUPT_FLAG_NOT_MOUNTED         = 0x00000040,   // 6    removed by dismounting
     AURA_INTERRUPT_FLAG_NOT_ABOVEWATER      = 0x00000080,   // 7    removed by entering water
     AURA_INTERRUPT_FLAG_NOT_UNDERWATER      = 0x00000100,   // 8    removed by leaving water
@@ -425,10 +425,13 @@ struct TC_GAME_API SpellDiminishInfo
     int32 DiminishDurationLimit = 0;
 };
 
-struct SpellPowerCost
+struct TC_GAME_API SpellPowerCost
 {
     Powers Power;
     int32 Amount;
+
+    // OptionalAmount is included in Amount
+    int32 OptionalAmount = 0;
 };
 
 class TC_GAME_API SpellInfo
@@ -491,6 +494,7 @@ class TC_GAME_API SpellInfo
         uint32 RangeIndex;
         SpellRangeEntry const* RangeEntry;
         float  Speed;
+        float  LaunchDelay;
         uint32 StackAmount;
         uint32 Totem[MAX_SPELL_TOTEMS];
         int32  Reagent[MAX_SPELL_REAGENTS];
@@ -532,6 +536,7 @@ class TC_GAME_API SpellInfo
         uint32 GetCategory() const;
         bool HasEffect(uint32 difficulty, SpellEffectName effect) const;
         bool HasEffect(SpellEffectName effect) const;
+        bool HasAura(uint32 difficulty) const;
         bool HasAura(uint32 difficulty, AuraType aura) const;
         bool HasAreaAuraEffect(uint32 difficulty) const;
         bool HasAreaAuraEffect() const;

@@ -1363,6 +1363,10 @@ void Spell::DoCreateItem(uint32 /*i*/, uint32 itemtype, uint8 context /*= 0*/, s
         return;
     }
 
+    // Archaeology research project
+    if (player->GetArchaeologyMgr().IsCurrentArtifactSpell(m_spellInfo->Id))
+        player->GetArchaeologyMgr().CompleteArtifact(m_spellInfo->Id);
+
     // bg reward have some special in code work
     uint32 bgType = 0;
     switch (m_spellInfo->Id)
@@ -2731,7 +2735,7 @@ void Spell::EffectTameCreature(SpellEffIndex /*effIndex*/)
     if (m_caster->IsPlayer())
     {
         pet->SavePetToDB(PET_SAVE_NEW_PET);
-        if (uint8 slot = pet->GetSlot() <= PET_SLOT_LAST_ACTIVE_SLOT)
+        if (pet->GetSlot() <= PET_SLOT_LAST_ACTIVE_SLOT)
         {
             m_caster->ToPlayer()->GetSession()->SendPetAdded(pet->GetSlot(), pet->GetCharmInfo()->GetPetNumber(), creatureTarget->GetEntry(), creatureTarget->GetDisplayId(), creatureTarget->GetLevelForTarget(m_caster), pet->GetName());
             m_caster->ToPlayer()->PetSpellInitialize();
@@ -4122,26 +4126,49 @@ void Spell::EffectSummonSurveyTools(SpellEffIndex /*effIndex*/)
 
             // If digsite info is empty, generate new position and read data
             if (digsite.x == 0 && digsite.y == 0)
-                sArchaeologyMgr->GenerateRandomPosition(player, digsite.digCount);
-
-            // Set FindGoEntry for treasure
-            switch (sArchaeologyMgr->GetCurrencyId(digsiteId))
             {
-                case 384: FindGoEntry = 204282; break; // Enano
-                case 398: FindGoEntry = 207188; break; // Draenei
-                case 393: FindGoEntry = 206836; break; // Fosil
-                case 394: FindGoEntry = 203071; break; // Elfo de la noche
-                case 400: FindGoEntry = 203078; break; // Nerubiano
-                case 397: FindGoEntry = 207187; break; // Orco
-                case 401: FindGoEntry = 207190; break; // Tol'vir
-                case 385: FindGoEntry = 202655; break; // Trol
-                default:  FindGoEntry = 207189; break; // Vrykul
+                sArchaeologyMgr->GenerateRandomPosition(player, digsite.digCount);
+                digsite = player->GetArchaeologyMgr().GetDigsitePosition(memId); // Refresh the digsite now that we have coordinates
             }
 
             // Spawn Find GameObject
             if (player->GetDistance2d(digsite.x, digsite.y) < 15.0f) // Hack fix should be 5.0f
             {
+                // Set FindGoEntry for treasure
+                auto currencyId = sArchaeologyMgr->GetCurrencyId(digsiteId);
+                switch (currencyId)
+                {
+                    case 384: FindGoEntry = 204282; break; // Dwarf
+                    case 398: FindGoEntry = 207188; break; // Draenei
+                    case 393: FindGoEntry = 206836; break; // Fossil
+                    case 394: FindGoEntry = 203071; break; // Night Elf
+                    case 400: FindGoEntry = 203078; break; // Nerubian
+                    case 397: FindGoEntry = 207187; break; // Orc
+                    case 401: FindGoEntry = 207190; break; // Tol'vir
+                    case 385: FindGoEntry = 202655; break; // Troll
+                    case 399: FindGoEntry = 207189; break; // Vrykul
+                    case 754: FindGoEntry = 218950; break; // Mantid
+                    case 676: FindGoEntry = 211163; break; // Pandaren
+                    case 677: FindGoEntry = 211174; break; // Mogu
+                    case 829: FindGoEntry = 234105; break; // Arakkoa
+                    case 821: FindGoEntry = 226521; break; // Draenor Clans
+                    case 828: FindGoEntry = 234106; break; // Ogre
+                    case 1172: FindGoEntry = 268440; break; // Highborne
+                    case 1173: FindGoEntry = 246804; break; // Highmountain Tauren
+                    case 1174: FindGoEntry = 268451; break; // Demonic
+                    default:
+                        TC_LOG_ERROR("spells", "EffectSummonSurveyTools: unknown currency ID %u for digsite %u, defaulting to Night Elf", currencyId, digsiteId);
+                        currencyId = 394;
+                        FindGoEntry = 203071;
+                        break;
+                }
+
                 player->SummonGameObject(FindGoEntry, *player, QuaternionData(), 0);
+
+                if (player->getRace() == RACE_DWARF)
+                    player->ModifyCurrency(currencyId, urand(6, 10));
+                else
+                    player->ModifyCurrency(currencyId, urand(5, 9));
 
                 // Count search or change digsite
                 if (digsite.digCount + 1 < 3)
@@ -4474,6 +4501,9 @@ void Spell::EffectKnockBack(SpellEffIndex /*effIndex*/)
     float speedz = float(damage) * ratio;
     if (speedxy < 0.1f && speedz < 0.1f)
         return;
+
+    if (!speedxy)
+        speedxy = 1.f;
 
     float x, y;
     if (effectInfo->Effect == SPELL_EFFECT_KNOCK_BACK_DEST)
@@ -5652,7 +5682,7 @@ void Spell::EffectUnlockGuildVaultTab(SpellEffIndex /*effIndex*/)
     // Safety checks done in Spell::CheckCast
     Player* caster = m_caster->ToPlayer();
     if (Guild* guild = caster->GetGuild())
-        guild->HandleBuyBankTab(caster->GetSession(), effectInfo->BasePoints - 1); // Bank tabs start at zero internally
+        guild->HandleBuyBankTab(caster->GetSession(), damage - 1); // Bank tabs start at zero internally
 }
 
 void Spell::EffectResurrectWithAura(SpellEffIndex effIndex)
@@ -5717,7 +5747,7 @@ void Spell::EffectRemoveTalent(SpellEffIndex /*effIndex*/)
     player->SendTalentsInfoData();
 }
 
-void Spell::EffectDestroyItem(SpellEffIndex effIndex)
+void Spell::EffectDestroyItem(SpellEffIndex /*effIndex*/)
 {
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
         return;
@@ -5726,13 +5756,11 @@ void Spell::EffectDestroyItem(SpellEffIndex effIndex)
         return;
 
     Player* player = unitTarget->ToPlayer();
-    SpellEffectInfo const* effect = GetEffect(effIndex);
-    uint32 itemId = effect->ItemType;
-    if (Item* item = player->GetItemByEntry(itemId))
+    if (Item* item = player->GetItemByEntry(effectInfo->ItemType))
         player->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
 }
 
-void Spell::EffectLearnGarrisonBuilding(SpellEffIndex effIndex)
+void Spell::EffectLearnGarrisonBuilding(SpellEffIndex /*effIndex*/)
 {
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
         return;
@@ -5741,7 +5769,7 @@ void Spell::EffectLearnGarrisonBuilding(SpellEffIndex effIndex)
         return;
 
     if (Garrison* garrison = unitTarget->ToPlayer()->GetGarrison(GARRISON_TYPE_GARRISON))
-        garrison->ToWodGarrison()->LearnBlueprint(GetEffect(effIndex)->MiscValue);
+        garrison->ToWodGarrison()->LearnBlueprint(effectInfo->MiscValue);
 }
 
 void Spell::EffectGrip(SpellEffIndex /*effIndex*/)
@@ -5758,7 +5786,7 @@ void Spell::EffectGrip(SpellEffIndex /*effIndex*/)
         m_caster->GetMotionMaster()->MoveJump(target->GetPosition(), 63.0f, 3.75f, m_spellInfo->Id);
 }
 
-void Spell::EffectCreateGarrison(SpellEffIndex effIndex)
+void Spell::EffectCreateGarrison(SpellEffIndex /*effIndex*/)
 {
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
         return;
@@ -5766,7 +5794,7 @@ void Spell::EffectCreateGarrison(SpellEffIndex effIndex)
     if (!unitTarget || !unitTarget->IsPlayer())
         return;
 
-    unitTarget->ToPlayer()->CreateGarrison(GetEffect(effIndex)->MiscValue);
+    unitTarget->ToPlayer()->CreateGarrison(effectInfo->MiscValue);
 }
 
 void Spell::EffectCreateConversation(SpellEffIndex /*effIndex*/)
@@ -5780,7 +5808,7 @@ void Spell::EffectCreateConversation(SpellEffIndex /*effIndex*/)
     Conversation::CreateConversation(effectInfo->MiscValue, GetCaster(), destTarget->GetPosition(), { GetCaster()->GetGUID() }, GetSpellInfo());
 }
 
-void Spell::EffectAddGarrisonFollower(SpellEffIndex effIndex)
+void Spell::EffectAddGarrisonFollower(SpellEffIndex /*effIndex*/)
 {
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
         return;
@@ -5788,7 +5816,7 @@ void Spell::EffectAddGarrisonFollower(SpellEffIndex effIndex)
     if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    unitTarget->ToPlayer()->AddGarrisonFollower(GetEffect(effIndex)->MiscValue);
+    unitTarget->ToPlayer()->AddGarrisonFollower(effectInfo->MiscValue);
 }
 
 void Spell::EffectCreateHeirloomItem(SpellEffIndex effIndex)
@@ -5811,7 +5839,7 @@ void Spell::EffectCreateHeirloomItem(SpellEffIndex effIndex)
     ExecuteLogEffectCreateItem(effIndex, m_misc.Raw.Data[0]);
 }
 
-void Spell::EffectActivateGarrisonBuilding(SpellEffIndex effIndex)
+void Spell::EffectActivateGarrisonBuilding(SpellEffIndex /*effIndex*/)
 {
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
         return;
@@ -5820,10 +5848,10 @@ void Spell::EffectActivateGarrisonBuilding(SpellEffIndex effIndex)
         return;
 
     if (Garrison* garrison = unitTarget->ToPlayer()->GetGarrison(GARRISON_TYPE_GARRISON))
-        garrison->ToWodGarrison()->ActivateBuilding(GetEffect(effIndex)->MiscValue);
+        garrison->ToWodGarrison()->ActivateBuilding(effectInfo->MiscValue);
 }
 
-void Spell::EffectHealBattlePetPct(SpellEffIndex effIndex)
+void Spell::EffectHealBattlePetPct(SpellEffIndex /*effIndex*/)
 {
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
         return;
@@ -5832,7 +5860,7 @@ void Spell::EffectHealBattlePetPct(SpellEffIndex effIndex)
         return;
 
     if (BattlePetMgr* battlePetMgr = unitTarget->ToPlayer()->GetSession()->GetBattlePetMgr())
-        battlePetMgr->HealBattlePetsPct(GetEffect(effIndex)->BasePoints);
+        battlePetMgr->HealBattlePetsPct(damage);
 }
 
 void Spell::EffectEnableBattlePets(SpellEffIndex /*effIndex*/)
@@ -5984,7 +6012,7 @@ void Spell::EffectUpdateZoneAurasAndPhases(SpellEffIndex /*effIndex*/)
     if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
         return;
 
-    unitTarget->ToPlayer()->UpdateAreaDependentAuras(unitTarget->GetAreaId());
+    unitTarget->ToPlayer()->UpdateAreaDependentAuras();
 }
 
 void Spell::EffectGiveExperience(SpellEffIndex /*effIndex*/)

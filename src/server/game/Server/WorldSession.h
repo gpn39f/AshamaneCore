@@ -314,6 +314,13 @@ namespace WorldPackets
         class GarrisonOpenMissionNpc;
         class GarrisonRequestScoutingMap;
         class GarrisonScoutingMapResult;
+        class GarrisonAddMissionResult;
+        class GarrisonStartMission;
+        class GarrisonStartMissionResult;
+        class GarrisonCompleteMission;
+        class GarrisonCompleteMissionResult;
+        class GarrisonMissionBonusRoll;
+        class GarrisonMissionBonusRollResult;
     }
 
     namespace Guild
@@ -1236,6 +1243,9 @@ class TC_GAME_API WorldSession
         void HandleBugReportOpcode(WorldPackets::Ticket::BugReport& bugReport);
         void HandleComplaint(WorldPackets::Ticket::Complaint& packet);
 
+        void OnGMTicketGetTicketEvent();
+        void SendTicketStatusUpdate(uint8 response);
+
         void HandleTogglePvP(WorldPackets::Misc::TogglePvP& packet);
         void HandleSetPvP(WorldPackets::Misc::SetPvP& packet);
 
@@ -1758,6 +1768,9 @@ class TC_GAME_API WorldSession
         void HandleGarrisonGetBuildingLandmarks(WorldPackets::Garrison::GarrisonGetBuildingLandmarks& garrisonGetBuildingLandmarks);
         void HandleGarrisonOpenMissionNpc(WorldPackets::Garrison::GarrisonOpenMissionNpcClient& garrisonOpenMissionNpc);
         void HandleGarrisonRequestScoutingMap(WorldPackets::Garrison::GarrisonRequestScoutingMap& scoutingMap);
+        void HandleGarrisonStartMission(WorldPackets::Garrison::GarrisonStartMission& startMission);
+        void HandleGarrisonCompleteMission(WorldPackets::Garrison::GarrisonCompleteMission& completeMission);
+        void HandleGarrisonMissionBonusRoll(WorldPackets::Garrison::GarrisonMissionBonusRoll& missionBonusRoll);
 
         // Battle Pets
         void HandleBattlePetRequestJournal(WorldPackets::BattlePet::BattlePetRequestJournal& battlePetRequestJournal);

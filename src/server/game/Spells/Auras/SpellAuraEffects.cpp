@@ -497,7 +497,7 @@ pAuraEffectHandler AuraEffectHandler[TOTAL_AURAS]=
     &AuraEffect::HandleLinkedSummon,                              //428 SPELL_AURA_LINKED_SUMMON
     &AuraEffect::HandleNULL,                                      //429
     &AuraEffect::HandlePlayScene,                                 //430 SPELL_AURA_PLAY_SCENE
-    &AuraEffect::HandleNULL,                                      //431
+    &AuraEffect::HandleOverrideZonePvpType,                       //431 SPELL_AURA_MOD_OVERRIDE_ZONE_PVP_TYPE
     &AuraEffect::HandleNULL,                                      //432
     &AuraEffect::HandleNULL,                                      //433
     &AuraEffect::HandleAuraLeech,                                 //434 SPELL_AURA_MOD_LEECH
@@ -555,8 +555,8 @@ pAuraEffectHandler AuraEffectHandler[TOTAL_AURAS]=
     &AuraEffect::HandleNULL,                                      //486
     &AuraEffect::HandleNULL,                                      //487
     &AuraEffect::HandleNULL,                                      //488
-    &AuraEffect::HandleNULL,                                      //489
-    &AuraEffect::HandleNULL,                                      //490
+    &AuraEffect::HandleNULL,                                      //489 SPELL_AURA_FORGET_LANGUAGE
+    &AuraEffect::HandleSwitchTeam,                                //490 SPELL_AURA_SWITCH_TEAM
     &AuraEffect::HandleNoImmediateEffect,                         //491 SPELL_AURA_MOD_HONOR_GAIN_PCT_2 implemented in Player::RewardHonor
 };
 
@@ -1797,7 +1797,7 @@ void AuraEffect::HandleAuraModShapeshift(AuraApplication const* aurApp, uint8 mo
         }
 
         if (modelid > 0)
-            target->RestoreDisplayId();
+            target->RestoreDisplayId(target->IsMounted());
 
         switch (form)
         {
@@ -2056,7 +2056,7 @@ void AuraEffect::HandleAuraTransform(AuraApplication const* aurApp, uint8 mode, 
         if (target->getTransForm() == GetId())
             target->setTransForm(0);
 
-        target->RestoreDisplayId();
+        target->RestoreDisplayId(target->IsMounted());
 
         // Dragonmaw Illusion (restore mount model)
         if (GetId() == 42016 && target->GetMountID() == 16314)
@@ -3056,7 +3056,7 @@ void AuraEffect::HandleAuraControlVehicle(AuraApplication const* aurApp, uint8 m
         if (GetId() == 53111) // Devour Humanoid
         {
             target->Kill(caster);
-            if (caster->GetTypeId() == TYPEID_UNIT)
+            if (caster->IsCreature())
                 caster->ToCreature()->RemoveCorpse();
         }
 
@@ -6318,14 +6318,55 @@ void AuraEffect::HandlePlayScene(AuraApplication const* aurApp, uint8 mode, bool
     if (!player)
         return;
 
-    uint32 sceneId = GetMiscValue();
+    SceneTemplate const* sceneTemplate = sObjectMgr->GetSceneTemplate(GetMiscValue());
+    if (!sceneTemplate)
+        return;
 
     if (apply)
-        player->GetSceneMgr().PlayScene(sceneId);
+        player->GetSceneMgr().PlaySceneByTemplate(*sceneTemplate);
+    else
+        player->GetSceneMgr().CancelSceneByPackageId(sceneTemplate->ScenePackageId);
+}
+
+void AuraEffect::HandleOverrideZonePvpType(AuraApplication const* aurApp, uint8 mode, bool apply) const
+{
+    if (!(mode & AURA_EFFECT_HANDLE_REAL))
+        return;
+
+    Player* player = aurApp->GetTarget()->ToPlayer();
+    if (!player)
+        return;
+
+    if (apply)
+    {
+        player->pvpInfo.IsInNoPvPArea   = false;
+        player->pvpInfo.IsInFFAPvPArea  = false;
+        player->pvpInfo.IsInHostileArea = false;
+        player->pvpInfo.IsHostile       = false;
+
+        switch (GetMiscValue())
+        {
+            case 1: // Sanctuary
+                player->pvpInfo.IsInNoPvPArea   = true;
+                break;
+            case 2: // FFA
+                player->pvpInfo.IsInFFAPvPArea  = true;
+                player->pvpInfo.IsHostile       = true;
+                break;
+            case 3: // PVP
+                player->pvpInfo.IsInHostileArea = true;
+                player->pvpInfo.IsHostile       = true;
+                break;
+            default:
+                break;
+        }
+
+        player->UpdatePvPState(false);
+    }
     else
     {
-        if (SceneTemplate const* sceneTemplate = sObjectMgr->GetSceneTemplate(sceneId))
-            player->GetSceneMgr().CancelSceneByPackageId(sceneTemplate->ScenePackageId);
+        // restore FFA PvP area state
+        player->UpdateArea(player->GetAreaIdFromPosition());
     }
 }
 
@@ -6460,7 +6501,6 @@ void AuraEffect::HandleLinkedSummon(AuraApplication const* aurApp, uint8 mode, b
     }
 }
 
-
 void AuraEffect::HandleModMovementforcesSpeedPercent(AuraApplication const* aurApp, uint8 mode, bool apply) const
 {
     if (!(mode & AURA_EFFECT_HANDLE_CHANGE_AMOUNT_MASK))
@@ -6473,4 +6513,15 @@ void AuraEffect::HandleModMovementforcesSpeedPercent(AuraApplication const* aurA
             ApplyPercentModFloatVar(forces.second.Magnitude, GetAmount(), apply);
 
     target->ReApplyAllMovementForces();
+}
+
+void AuraEffect::HandleSwitchTeam(AuraApplication const* aurApp, uint8 mode, bool apply) const
+{
+    if (!(mode & AURA_EFFECT_HANDLE_REAL))
+        return;
+
+    Unit* target = aurApp->GetTarget();
+
+    if (Player* player = target->ToPlayer())
+        player->SwitchToOppositeTeam(apply);
 }

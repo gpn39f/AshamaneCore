@@ -104,6 +104,11 @@ namespace WorldPackets
     {
         struct CharacterCreateInfo;
     }
+
+    namespace Battleground
+    {
+        struct RatedInfo;
+    }
 }
 
 typedef std::deque<Mail*> PlayerMails;
@@ -244,6 +249,7 @@ struct PlayerCurrency
     uint32 Quantity;
     uint32 WeeklyQuantity;
     uint32 TrackedQuantity;
+    uint32 WeekCap;
     uint8 Flags;
 };
 
@@ -820,11 +826,11 @@ enum PlayerLoginQueryIndex
     PLAYER_LOGIN_QUERY_LOAD_SPELL_CHARGES,
     PLAYER_LOGIN_QUERY_LOAD_DECLINED_NAMES,
     PLAYER_LOGIN_QUERY_LOAD_GUILD,
-    PLAYER_LOGIN_QUERY_LOAD_ARENA_INFO,
     PLAYER_LOGIN_QUERY_LOAD_ACHIEVEMENTS,
     PLAYER_LOGIN_QUERY_LOAD_CRITERIA_PROGRESS,
     PLAYER_LOGIN_QUERY_LOAD_EQUIPMENT_SETS,
     PLAYER_LOGIN_QUERY_LOAD_TRANSMOG_OUTFITS,
+    PLAYER_LOGIN_QUERY_LOAD_ARENA_DATA,
     PLAYER_LOGIN_QUERY_LOAD_BG_DATA,
     PLAYER_LOGIN_QUERY_LOAD_GLYPHS,
     PLAYER_LOGIN_QUERY_LOAD_TALENTS,
@@ -1299,6 +1305,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         /// initialize currency count for custom initialization at create character
         void SetCurrency(uint32 id, uint32 count, bool printLog = true);
         void ResetCurrencyWeekCap();
+        uint32 CalculateCurrencyWeekCap(uint32 id) const;
 
         /**
           * @name   ModifyCurrency
@@ -1716,7 +1723,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void DisablePvpRules();
         bool HasPvpRulesEnabled() const;
         bool IsInAreaThatActivatesPvpTalents() const;
-        bool IsAreaThatActivatesPvpTalents(uint32 areaID) const;
+        bool IsAreaThatActivatesPvpTalents(AreaTableEntry const* area) const;
 
         // Dual Spec
         void ActivateTalentGroup(ChrSpecializationEntry const* spec);
@@ -1784,10 +1791,9 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void UpdatePvPState(bool onlyFFA = false);
         void SetPvP(bool state) override;
         void UpdatePvP(bool state, bool override=false);
-        void UpdateZone(uint32 newZone, uint32 newArea);
-        void UpdateArea(uint32 newArea);
-        void UpdateZoneDependentAuras(uint32 zone_id);    // zones
-        void UpdateAreaDependentAuras(uint32 area_id);    // subzones
+        void UpdateArea(uint32 newAreaId);
+        void UpdateZone(Area* oldArea);
+        void UpdateAreaDependentAuras();
 
         void UpdateAfkReport(time_t currTime);
         void UpdatePvPFlag(time_t currTime);
@@ -1824,18 +1830,19 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         static void RemovePetitionsAndSigns(ObjectGuid guid);
 
         // Arena
-        uint32 GetArenaPersonalRating(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ArenaPersonalRating[slot]; }
-        uint32 GetBestRatingOfWeek(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_BestRatingOfWeek[slot]; }
-        uint32 GetBestRatingOfSeason(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_BestRatingOfSeason[slot]; }
-        uint32 GetWeekWins(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_WeekWins[slot]; }
-        uint32 GetPrevWeekWins(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_PrevWeekWins[slot]; }
-        uint32 GetPrevWeekGames(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_PrevWeekGames[slot]; }
-        uint32 GetSeasonWins(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_SeasonWins[slot]; }
-        uint32 GetWeekGames(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_WeekGames[slot]; }
-        uint32 GetSeasonGames(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_SeasonGames[slot]; }
-        uint32 GetArenaMatchMakerRating(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ArenaMatchMakerRating[slot]; }
+        std::array<WorldPackets::Battleground::RatedInfo, MAX_PVP_SLOT> GetRatedInfos() { return m_ratedInfos; }
+        uint32 GetArenaPersonalRating(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].ArenaPersonalRating; }
+        uint32 GetBestRatingOfWeek(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].BestRatingOfWeek; }
+        uint32 GetBestRatingOfSeason(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].BestRatingOfSeason; }
+        uint32 GetWeekWins(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].WeekWins; }
+        uint32 GetPrevWeekWins(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].PrevWeekWins; }
+        uint32 GetPrevWeekGames(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].PrevWeekGames; }
+        uint32 GetSeasonWins(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].SeasonWins; }
+        uint32 GetWeekGames(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].WeekGames; }
+        uint32 GetSeasonGames(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].SeasonGames; }
+        uint32 GetArenaMatchMakerRating(uint8 slot) const { ASSERT(slot < MAX_PVP_SLOT); return m_ratedInfos[slot].ArenaMatchMakerRating; }
         uint32 GetMaxRating() const;
-        void SetArenaPersonalRating(uint8 p_Slot, uint32 p_Value);
+        void SetArenaPersonalRating(uint8 slot, uint32 value);
         void SetArenaMatchMakerRating(uint8 slot, uint32 value);
         void IncrementWeekGames(uint8 slot);
         void IncrementWeekWins(uint8 slot);
@@ -1948,7 +1955,6 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool UpdatePosition(const Position &pos, bool teleport = false) override { return UpdatePosition(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation(), teleport); }
         void UpdateUnderwaterState(Map* m, float x, float y, float z) override;
 
-        bool MeetPlayerCondition(uint32 conditionId) const;
         bool HasWorldQuestEnabled() const;
         void UpdateWorldQuestPosition(float x, float y);
 
@@ -2021,10 +2027,15 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         static uint32 TeamForRace(uint8 race);
         static TeamId TeamIdForRace(uint8 race);
         uint32 GetTeam() const { return m_team; }
+        void SwitchToOppositeTeam(bool apply);
+        uint32 GetBgQueueTeam() const;
         bool IsInAlliance() const { return m_team == ALLIANCE; }
         bool IsInHorde() const { return m_team == HORDE; }
         TeamId GetTeamId() const { return m_team == ALLIANCE ? TEAM_ALLIANCE : TEAM_HORDE; }
         void setFactionForRace(uint8 race);
+
+        uint32 GetNativeTeam() const { return TeamForRace(getRace()); }
+        TeamId GetNativeTeamId() const { return TeamIdForRace(getRace()); }
 
         void InitDisplayIds();
 
@@ -2140,7 +2151,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void SetEquipmentSet(EquipmentSetInfo::EquipmentSetData const& newEqSet);
         void DeleteEquipmentSet(uint64 id);
 
-        void SendInitWorldStates(uint32 zone, uint32 area);
+        void SendInitWorldStates();
         void SendUpdateWorldState(uint32 variable, uint32 value, bool hidden = false) const;
         void SendDirectMessage(WorldPacket const* data) const;
         void SendBGWeekendWorldStates() const;
@@ -2306,6 +2317,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         uint8 GetItemLimitCategoryQuantity(ItemLimitCategoryEntry const* limitEntry) const;
         void ShowNeutralPlayerFactionSelectUI();
 
+        void SetEffectiveLevelAndMaxItemLevel(uint32 effectiveLevel, uint32 maxItemLevel);
+
         void UpdateItemLevelAreaBasedScaling();
         void ActivatePvpItemLevels(bool activate) { _usePvpItemLevels = activate; }
         bool IsUsingPvpItemLevels() const { return _usePvpItemLevels; }
@@ -2314,20 +2327,20 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         /***                 INSTANCE SYSTEM                   ***/
         /*********************************************************/
 
-        typedef std::unordered_map< uint32 /*mapId*/, InstancePlayerBind > BoundInstancesMap;
+        typedef std::unordered_map<Difficulty, std::unordered_map<uint32 /*mapId*/, InstancePlayerBind>> BoundInstancesMap;
 
         void UpdateHomebindTime(uint32 time);
 
         uint32 m_HomebindTimer;
         bool m_InstanceValid;
         // permanent binds and solo binds by difficulty
-        BoundInstancesMap m_boundInstances[MAX_DIFFICULTY];
+        BoundInstancesMap m_boundInstances;
         InstancePlayerBind* GetBoundInstance(uint32 mapid, Difficulty difficulty, bool withExpired = false);
         InstancePlayerBind const* GetBoundInstance(uint32 mapid, Difficulty difficulty) const;
-        BoundInstancesMap& GetBoundInstances(Difficulty difficulty) { return m_boundInstances[difficulty]; }
+        BoundInstancesMap::iterator GetBoundInstances(Difficulty difficulty) { return m_boundInstances.find(difficulty); }
         InstanceSave* GetInstanceSave(uint32 mapid);
         void UnbindInstance(uint32 mapid, Difficulty difficulty, bool unload = false);
-        void UnbindInstance(BoundInstancesMap::iterator &itr, Difficulty difficulty, bool unload = false);
+        void UnbindInstance(BoundInstancesMap::mapped_type::iterator& itr, BoundInstancesMap::iterator& difficultyItr, bool unload = false);
         InstancePlayerBind* BindToInstance(InstanceSave* save, bool permanent, BindExtensionState extendState = EXTEND_STATE_NORMAL, bool load = false);
         void BindToInstance();
         void SetPendingBind(uint32 instanceId, uint32 bindTimer);
@@ -2479,17 +2492,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         // End Garrisons
 
         // Arena
-        uint32 m_ArenaPersonalRating[MAX_PVP_SLOT];
-        uint32 m_BestRatingOfWeek[MAX_PVP_SLOT];
-        uint32 m_BestRatingOfSeason[MAX_PVP_SLOT];
-        uint32 m_ArenaMatchMakerRating[MAX_PVP_SLOT];
-        uint32 m_WeekWins[MAX_PVP_SLOT];
-        uint32 m_PrevWeekWins[MAX_PVP_SLOT];
-        uint32 m_PrevWeekGames[MAX_PVP_SLOT];
-        uint32 m_SeasonWins[MAX_PVP_SLOT];
-        uint32 m_WeekGames[MAX_PVP_SLOT];
-        uint32 m_SeasonGames[MAX_PVP_SLOT];
-        // End Arena
+        std::array<WorldPackets::Battleground::RatedInfo, MAX_PVP_SLOT> m_ratedInfos;
 
         bool IsAdvancedCombatLoggingEnabled() const { return _advancedCombatLoggingEnabled; }
         void SetAdvancedCombatLogging(bool enabled) { _advancedCombatLoggingEnabled = enabled; }
@@ -2500,26 +2503,10 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         SceneMgr const& GetSceneMgr() const { return m_sceneMgr; }
         RestMgr& GetRestMgr() const { return *_restMgr; }
 
-        struct MovieDelayedTeleport
+        std::vector<std::pair<uint32, std::function<void()>>> MovieDelayedActions;
+        void AddMovieDelayedAction(uint32 movieId, std::function<void()> && function)
         {
-            uint32 movieId;
-            WorldLocation loc;
-        };
-
-        std::vector<MovieDelayedTeleport> MovieDelayedTeleports;
-
-        void AddMovieDelayedTeleport(uint32 movieId, uint32 mapID, float x, float y, float z, float o)
-        {
-            MovieDelayedTeleport data;
-            data.movieId = movieId;
-            data.loc = WorldLocation(mapID);
-            data.loc.Relocate(x, y, z, o);
-
-            MovieDelayedTeleports.push_back(data);
-        }
-        void AddMovieDelayedTeleport(uint32 movieId, uint32 mapID, Position pos)
-        {
-            AddMovieDelayedTeleport(movieId, mapID, pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation());
+            MovieDelayedActions.push_back(std::pair<uint32, std::function<void()>>(movieId, function));
         }
 
         void SendPlayerChoice(ObjectGuid sender, int32 choiceId);
@@ -2535,6 +2522,12 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void AddToPlayerPetDataStore(PlayerPetData* playerPetData);
 
         ArchaeologyPlayerMgr& GetArchaeologyMgr() { return m_archaeologyPlayerMgr; }
+
+        bool MeetPlayerCondition(uint32 conditionId) const;
+
+        // Send custom message with system message (addon, custom interfaces ...etc)
+        void SendCustomMessage(std::string const& opcode, std::string const& data = "");
+        void SendCustomMessage(std::string const& opcode, std::vector<std::string> const& data);
 
     protected:
         // Gamemaster whisper whitelist
@@ -2608,6 +2601,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void _LoadDeclinedNames(PreparedQueryResult result);
         void _LoadEquipmentSets(PreparedQueryResult result);
         void _LoadTransmogOutfits(PreparedQueryResult result);
+        void _LoadArenaData(PreparedQueryResult result);
         void _LoadBGData(PreparedQueryResult result);
         void _LoadGlyphs(PreparedQueryResult result);
         void _LoadTalents(PreparedQueryResult result);
@@ -2633,6 +2627,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void _SaveSkills(SQLTransaction& trans);
         void _SaveSpells(SQLTransaction& trans);
         void _SaveEquipmentSets(SQLTransaction& trans);
+        void _SaveArenaData(SQLTransaction& trans);
         void _SaveBGData(SQLTransaction& trans);
         void _SaveGlyphs(SQLTransaction& trans) const;
         void _SaveTalents(SQLTransaction& trans);
@@ -2752,9 +2747,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         uint32 m_drunkTimer;
         uint32 m_weaponChangeTimer;
 
-        uint32 m_zoneUpdateId;
         uint32 m_zoneUpdateTimer;
-        uint32 m_areaUpdateId;
 
         uint32 m_deathTimer;
         time_t m_deathExpireTime;

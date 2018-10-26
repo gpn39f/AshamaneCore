@@ -111,10 +111,10 @@ enum BattlegroundMarks
     ITEM_SA_MARK_OF_HONOR           = 42425
 };
 
-enum BattlegroundMarksCount
+enum BattlegroundChests
 {
-    ITEM_WINNER_COUNT               = 3,
-    ITEM_LOSER_COUNT                = 1
+    ITEM_BG_ALLIANCE_CHEST  = 151557,
+    ITEM_BG_HORDE_CHEST     = 151558,
 };
 
 enum BattlegroundCreatures
@@ -136,7 +136,11 @@ enum BattlegroundSpells
     SPELL_RECENTLY_DROPPED_FLAG     = 42792,                // Recently Dropped Flag
     SPELL_AURA_PLAYER_INACTIVE      = 43681,                // Inactive
     SPELL_HONORABLE_DEFENDER_25Y    = 68652,                // +50% honor when standing at a capture point that you control, 25yards radius (added in 3.2)
-    SPELL_HONORABLE_DEFENDER_60Y    = 66157                 // +50% honor when standing at a capture point that you control, 60yards radius (added in 3.2), probably for 40+ player battlegrounds
+    SPELL_HONORABLE_DEFENDER_60Y    = 66157,                // +50% honor when standing at a capture point that you control, 60yards radius (added in 3.2), probably for 40+ player battlegrounds
+    SPELL_MERCENARY_HORDE_1         = 193864,
+    SPELL_MERCENARY_HORDE_2         = 195838,
+    SPELL_MERCENARY_ALLIANCE_1      = 193863,
+    SPELL_MERCENARY_ALLIANCE_2      = 195843,
 };
 
 enum BattlegroundTimeIntervals
@@ -398,6 +402,7 @@ class TC_GAME_API Battleground
         void RemoveAuraOnTeam(uint32 SpellID, uint32 TeamID);
         void RewardHonorToTeam(uint32 Honor, uint32 TeamID);
         void RewardReputationToTeam(uint32 faction_id, uint32 Reputation, uint32 TeamID);
+        void RewardChestToTeam(uint32 TeamID);
         void UpdateWorldState(uint32 variable, uint32 value, bool hidden = false);
         virtual void EndBattleground(uint32 winner);
         void BlockMovement(Player* player);

@@ -27,6 +27,7 @@ EndScriptData */
 #include "BattlefieldMgr.h"
 #include "BattlegroundMgr.h"
 #include "CellImpl.h"
+#include "ChannelPackets.h"
 #include "Chat.h"
 #include "ChatPackets.h"
 #include "Conversation.h"
@@ -117,6 +118,7 @@ public:
             { "criteria",      rbac::RBAC_PERM_COMMAND_DEBUG,               false, &HandleDebugCriteriaCommand,         "" },
             { "movementforce", rbac::RBAC_PERM_COMMAND_DEBUG_MOVEMENT_FORCE,false, nullptr,                             "", debugMovementForceCommandTable },
             { "playercondition",rbac::RBAC_PERM_COMMAND_DEBUG,              false, &HandleDebugPlayerConditionCommand,  "" },
+            { "maxItemLevel",   rbac::RBAC_PERM_COMMAND_DEBUG,              false, &HandleDebugMaxItemLevelCommand,     "" },
         };
         static std::vector<ChatCommand> commandTable =
         {
@@ -488,12 +490,10 @@ public:
         char const* name = "test";
         uint8 code = atoi(args);
 
-        WorldPacket data(SMSG_CHANNEL_NOTIFY, (1+10));
-        data << code;                                           // notify type
-        data << name;                                           // channel name
-        data << uint32(0);
-        data << uint32(0);
-        handler->GetSession()->SendPacket(&data);
+        WorldPackets::Channel::ChannelNotify channelNotify;
+        channelNotify.Type = code;
+        channelNotify._Channel = name;
+        handler->GetSession()->SendPacket(channelNotify.Write());
         return true;
     }
 
@@ -1677,6 +1677,18 @@ public:
         else
             handler->PSendSysMessage("False");
 
+        return true;
+    }
+
+    static bool HandleDebugMaxItemLevelCommand(ChatHandler* handler, char const* args)
+    {
+        CommandArgs commandArgs = CommandArgs(handler, args, { CommandArgs::ARG_UINT, CommandArgs::ARG_UINT });
+        if (!commandArgs.ValidArgs())
+            return false;
+
+        uint32 effectiveLevel = commandArgs.GetNextArg<uint32>();
+        uint32 maxItemLevel = commandArgs.GetNextArg<uint32>();
+        handler->getSelectedPlayerOrSelf()->SetEffectiveLevelAndMaxItemLevel(effectiveLevel, maxItemLevel);
         return true;
     }
 };

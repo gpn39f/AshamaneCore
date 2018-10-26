@@ -427,7 +427,7 @@ class boss_kargath_bladefist : public CreatureScript
                 me->SetDisplayId(eDatas::MorphAmputation);
 
                 /// prevent the "unable to loot" after been killed
-                if(me->GetPositionZ() > 58)
+                if(me->GetPositionZ() > 58.0f)
                     me->NearTeleportTo(me->GetPositionX(), me->GetPositionY(), 55.3f, me->GetOrientation());
 
                 if (m_Instance)
@@ -2774,7 +2774,7 @@ class npc_highmauareaTrigger_for_crowd : public CreatureScript
 
                 if (m_CheckTimer <= diff)
                 {
-                    if (Player* player = me->SelectNearestPlayer(10.0f))
+                    if (me->SelectNearestPlayer(10.0f) != nullptr)
                     {
                         m_IntroStarted = true;
 

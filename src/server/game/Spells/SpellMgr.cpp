@@ -23,6 +23,7 @@
 #include "Chat.h"
 #include "DB2Stores.h"
 #include "DatabaseEnv.h"
+#include "GameEventMgr.h"
 #include "Log.h"
 #include "MotionMaster.h"
 #include "ObjectMgr.h"
@@ -644,6 +645,9 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
     if (auraSpell)                               // does not have expected aura
         if (!player || (auraSpell > 0 && !player->HasAura(auraSpell)) || (auraSpell < 0 && player->HasAura(-auraSpell)))
             return false;
+
+    if (!sGameEventMgr->IsSpellAreaEventActive(areaId, spellId))
+        return false;
 
     if (player)
     {
@@ -2730,12 +2734,6 @@ void SpellMgr::LoadSpellInfoCorrections()
         const_cast<SpellEffectInfo*>(spellInfo->GetEffect(EFFECT_2))->BasePoints += 30000;
     });
 
-    // Eye for an Eye
-    ApplySpellFix({ 205191 }, [](SpellInfo* spellInfo)
-    {
-        const_cast<SpellEffectInfo*>(spellInfo->GetEffect(EFFECT_0))->ApplyAuraName = SPELL_AURA_PROC_TRIGGER_SPELL;
-    });
-
     // Parasitic Shadowfiend Passive
     ApplySpellFix({ 41913 }, [](SpellInfo* spellInfo)
     {
@@ -3535,7 +3533,8 @@ void SpellMgr::LoadSpellInfoCorrections()
         120344, // Summon Aysa
         120345, // Summon Jojo
         120749, // Summon Ji
-        120753  // Summon Garrosh
+        120753, // Summon Garrosh
+        68059,  // Miner Troubles : Summon frightened miner
     }, [](SpellInfo* spellInfo)
     {
         spellInfo->RangeEntry = sSpellRangeStore.LookupEntry(7); // 10yd
@@ -3613,6 +3612,53 @@ void SpellMgr::LoadSpellInfoCorrections()
     ApplySpellFix({ 8122 }, [](SpellInfo* spellInfo)
     {
         const_cast<SpellEffectInfo*>(spellInfo->GetEffect(EFFECT_1))->Effect = 0;
+    });
+
+    // Aura of Sacrifice
+    ApplySpellFix({ 183416 }, [](SpellInfo* spellInfo)
+    {
+        const_cast<SpellEffectInfo*>(spellInfo->GetEffect(EFFECT_1))->Effect = 0;
+        const_cast<SpellEffectInfo*>(spellInfo->GetEffect(EFFECT_4))->Effect = 0;
+    });
+
+    // Ray of Frost
+    ApplySpellFix({ 205021 }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->AuraInterruptFlags[AuraInterruptFlagIndex<SpellAuraInterruptFlags>::value] &= ~CHANNEL_FLAG_DELAY;
+    });
+
+    // Void Suppression
+    ApplySpellFix({ 260888 }, [](SpellInfo* spellInfo)
+    {
+        const_cast<SpellEffectInfo*>(spellInfo->GetEffect(EFFECT_1))->Effect = 0;
+    });
+
+    // Horde / Alliance
+    ApplySpellFix({ 195838, 195843 }, [](SpellInfo* spellInfo)
+    {
+        for (uint8 effectIndex = 0; effectIndex <= EFFECT_2; ++effectIndex)
+            const_cast<SpellEffectInfo*>(spellInfo->GetEffect(effectIndex))->Effect = SPELL_EFFECT_APPLY_AURA;
+    });
+
+    // Devour
+    ApplySpellFix({ 211543 }, [](SpellInfo* spellInfo)
+    {
+        for (uint8 effectIndex = 0; effectIndex <= EFFECT_1; ++effectIndex)
+        {
+            const_cast<SpellEffectInfo*>(spellInfo->GetEffect(effectIndex))->TargetA = SpellImplicitTargetInfo(TARGET_UNIT_TARGET_ENEMY);
+            const_cast<SpellEffectInfo*>(spellInfo->GetEffect(effectIndex))->TargetB = SpellImplicitTargetInfo();
+        }
+    });
+
+
+    ApplySpellFix({
+        70661, // See quest invis 1
+        70678, // See quest invis 2
+        70680, // See quest invis 3
+        70681, // See quest invis 4
+    }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->RequiredAreasID = 0;
     });
 
     SpellInfo* spellInfo = NULL;

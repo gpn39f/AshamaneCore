@@ -46,6 +46,7 @@ class WorldLocation;
 class WorldObject;
 struct SpellDestination;
 struct SpellModifier;
+struct SpellPowerCost;
 struct SpellValue;
 
 #define SPELL_EFFECT_ANY (uint16)-1
@@ -203,7 +204,7 @@ class TC_GAME_API SpellScript : public _SpellScript
             typedef void(CLASSNAME::*SpellOnPrepareFnType)(); \
             typedef void(CLASSNAME::*SpellDestinationTargetSelectFnType)(SpellDestination&); \
             typedef void(CLASSNAME::*SpellOnSummonFnType)(Creature* summon); \
-            typedef void(CLASSNAME::*SpellOnTakePowerFnType)(Powers& power, int32& powerCost); \
+            typedef void(CLASSNAME::*SpellOnTakePowerFnType)(SpellPowerCost& powerCost); \
             typedef void(CLASSNAME::*SpellOnCalcCastTimeFnType)(int32& castTime); \
             typedef void(CLASSNAME::*SpellOnCalcCritChanceFnType)(Unit* victim, float& chance);
 
@@ -249,7 +250,7 @@ class TC_GAME_API SpellScript : public _SpellScript
         {
         public:
             OnTakePowerHandler(SpellOnTakePowerFnType OnTakePowerHandlerScript);
-            void Call(SpellScript* spellScript, Powers& power, int32& powerCost);
+            void Call(SpellScript* spellScript, SpellPowerCost& powerCost);
         private:
             SpellOnTakePowerFnType _onTakePowerHandlerScript;
         };
@@ -442,7 +443,7 @@ class TC_GAME_API SpellScript : public _SpellScript
         #define SpellOnEffectSummonFn(F) OnSummonHandlerFunction(&F)
 
         // example: OnTakePower += SpellOnTakePowerFn(class::function);
-        // where function is void function(Powers& power, int32& powerCount)
+        // where function is void function(SpellPowerCost& powerCost)
         HookList<OnTakePowerHandler> OnTakePower;
         #define SpellOnTakePowerFn(F) OnTakePowerHandlerFunction(&F)
 
@@ -507,6 +508,8 @@ class TC_GAME_API SpellScript : public _SpellScript
 
         // returns: Item which was selected as an explicit spell target or NULL if there's no target
         Item* GetExplTargetItem() const;
+
+        ObjectGuid GetOrigUnitTargetGUID() const;
 
         // methods useable only during spell hit on target, or during spell launch on target:
         // returns: target of current effect if it was Unit otherwise NULL

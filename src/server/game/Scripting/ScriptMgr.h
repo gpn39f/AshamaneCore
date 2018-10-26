@@ -25,6 +25,7 @@
 #include <boost/property_tree/ptree.hpp>
 
 class AccountMgr;
+class Area;
 class AreaTrigger;
 class AreaTriggerAI;
 class AuctionHouseObject;
@@ -409,7 +410,7 @@ class TC_GAME_API UnitScript : public ScriptObject
         virtual void OnHeal(Unit* /*healer*/, Unit* /*reciever*/, uint32& /*gain*/) { }
 
         // Called when a unit deals damage to another unit
-        virtual void OnDamage(Unit* /*attacker*/, Unit* /*victim*/, uint32& /*damage*/) { }
+        virtual void OnDamage(Unit* /*attacker*/, Unit* /*victim*/, uint32& /*damage*/, SpellInfo const* /*spellProto*/) { }
 
         // Called when DoT's Tick Damage is being Dealt
         virtual void ModifyPeriodicDamageAurasTick(Unit* /*target*/, Unit* /*attacker*/, uint32& /*damage*/) { }
@@ -418,7 +419,7 @@ class TC_GAME_API UnitScript : public ScriptObject
         virtual void ModifyMeleeDamage(Unit* /*target*/, Unit* /*attacker*/, uint32& /*damage*/) { }
 
         // Called when Spell Damage is being Dealt
-        virtual void ModifySpellDamageTaken(Unit* /*target*/, Unit* /*attacker*/, int32& /*damage*/) { }
+        virtual void ModifySpellDamageTaken(Unit* /*target*/, Unit* /*attacker*/, int32& /*damage*/, SpellInfo const* /*spellInfo*/) { }
 };
 
 class TC_GAME_API CreatureScript : public UnitScript, public UpdatableScript<Creature>
@@ -765,10 +766,10 @@ class TC_GAME_API PlayerScript : public UnitScript
         virtual void OnBindToInstance(Player* /*player*/, Difficulty /*difficulty*/, uint32 /*mapId*/, bool /*permanent*/, uint8 /*extendState*/) { }
 
         // Called when a player switches to a new zone
-        virtual void OnUpdateZone(Player* /*player*/, uint32 /*newZone*/, uint32 /*oldZone*/, uint32 /*newArea*/) { }
+        virtual void OnUpdateZone(Player* /*player*/, Area* /*newArea*/, Area* /*oldArea*/) { }
 
         // Called when a player switches to a new area
-        virtual void OnUpdateArea(Player* /*player*/, uint32 /*newArea*/, uint32 /*oldArea*/) { }
+        virtual void OnUpdateArea(Player* /*player*/, Area* /*newArea*/, Area* /*oldArea*/) { }
 
         // Called when a player changes to a new map (after moving to new map)
         virtual void OnMapChanged(Player* /*player*/) { }
@@ -1237,8 +1238,8 @@ class TC_GAME_API ScriptMgr
         void OnPlayerFailedDelete(ObjectGuid guid, uint32 accountId);
         void OnPlayerSave(Player* player);
         void OnPlayerBindToInstance(Player* player, Difficulty difficulty, uint32 mapid, bool permanent, uint8 extendState);
-        void OnPlayerUpdateZone(Player* player, uint32 newZone, uint32 oldZone, uint32 newArea);
-        void OnPlayerUpdateArea(Player* player, uint32 newArea, uint32 oldArea);
+        void OnPlayerUpdateZone(Player* player, Area* newArea, Area* oldArea);
+        void OnPlayerUpdateArea(Player* player, Area* newArea, Area* oldArea);
         void OnQuestAccept(Player* player, const Quest* quest);
         void OnQuestReward(Player* player, const Quest* quest);
         void OnObjectiveValidate(Player* player, uint32 questID, uint32 objectiveID);
@@ -1296,10 +1297,10 @@ class TC_GAME_API ScriptMgr
     public: /* UnitScript */
 
         void OnHeal(Unit* healer, Unit* reciever, uint32& gain);
-        void OnDamage(Unit* attacker, Unit* victim, uint32& damage);
+        void OnDamage(Unit* attacker, Unit* victim, uint32& damage, SpellInfo const* spellProto);
         void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage);
         void ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage);
-        void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage);
+        void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage, SpellInfo const* spellInfo);
 
     public: /* AreaTriggerEntityScript */
 

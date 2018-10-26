@@ -153,6 +153,34 @@ SpellCastTargets::SpellCastTargets(Unit* caster, WorldPackets::Spells::SpellCast
     SetPitch(spellCastRequest.MissileTrajectory.Pitch);
     SetSpeed(spellCastRequest.MissileTrajectory.Speed);
 
+    if (spellCastRequest.SendCastFlags == 8)   // Archaeology
+    {
+        uint32 kEntry, kCount, fEntry, fCount;
+        uint8 type;
+
+        for (auto const& weight : spellCastRequest.Weight)
+        {
+            type = weight.Type;
+            switch (type)
+            {
+                case 1: // Fragments
+                    fEntry = weight.ID;        // Currency id
+                    fCount = weight.Quantity;        // Currency count
+                    break;
+                case 2: // Keystones
+                    kEntry = weight.ID;        // Item id
+                    kCount = weight.Quantity;        // Item count
+                    break;
+            }
+        }
+
+        if (kCount > 0 && caster->GetTypeId() == TYPEID_PLAYER)
+            caster->ToPlayer()->DestroyItemCount(kEntry, -(int32(kCount)), true, false);
+
+        if (fCount > 0 && caster->GetTypeId() == TYPEID_PLAYER)
+            caster->ToPlayer()->ModifyCurrency(fEntry, -(int32(fCount)), false);
+    }
+
     Update(caster);
 }
 
@@ -836,15 +864,15 @@ void Spell::SelectSpellTargets()
         {
             float speed = m_targets.GetSpeedXY();
             if (speed > 0.0f)
-                m_delayMoment = uint64(std::floor(m_targets.GetDist2d() / speed * 1000.0f));
+                m_delayMoment = uint64(std::floor(m_targets.GetDist2d() / speed * 1000.0f) + (m_spellInfo->LaunchDelay * 1000.0f));
         }
         else if (m_spellInfo->Speed > 0.0f)
         {
             float dist = m_caster->GetDistance(*m_targets.GetDstPos());
             if (!m_spellInfo->HasAttribute(SPELL_ATTR9_SPECIAL_DELAY_CALCULATION))
-                m_delayMoment = uint64(std::floor(dist / m_spellInfo->Speed * 1000.0f));
+                m_delayMoment = uint64(std::floor(dist / m_spellInfo->Speed * 1000.0f) + (m_spellInfo->LaunchDelay * 1000.0f));
             else
-                m_delayMoment = uint64(m_spellInfo->Speed * 1000.0f);
+                m_delayMoment = uint64((m_spellInfo->Speed * 1000.0f) + (m_spellInfo->LaunchDelay * 1000.0f));
         }
     }
 }
@@ -1549,7 +1577,7 @@ void Spell::SelectImplicitCasterObjectTargets(SpellEffIndex effIndex, SpellImpli
         case TARGET_UNIT_PASSENGER_5:
         case TARGET_UNIT_PASSENGER_6:
         case TARGET_UNIT_PASSENGER_7:
-            if (m_caster->GetTypeId() == TYPEID_UNIT && m_caster->IsVehicle())
+            if (m_caster->IsVehicle())
                 target = m_caster->GetVehicleKit()->GetPassenger(targetType.GetTarget() - TARGET_UNIT_PASSENGER_0);
             break;
         default:
@@ -2269,9 +2297,9 @@ void Spell::AddUnitTarget(Unit* target, uint32 effectMask, bool checkIfValid /*=
             dist = 5.0f;
 
         if (!m_spellInfo->HasAttribute(SPELL_ATTR9_SPECIAL_DELAY_CALCULATION))
-            targetInfo.timeDelay = uint64(std::floor(dist / m_spellInfo->Speed * 1000.0f));
+            targetInfo.timeDelay = uint64(std::floor(dist / m_spellInfo->Speed * 1000.0f) + (m_spellInfo->LaunchDelay * 1000.0f));
         else
-            targetInfo.timeDelay = uint64(m_spellInfo->Speed * 1000.0f);
+            targetInfo.timeDelay = uint64((m_spellInfo->Speed * 1000.0f) + (m_spellInfo->LaunchDelay * 1000.0f));
     }
     else
         targetInfo.timeDelay = 0ULL;
@@ -2340,9 +2368,9 @@ void Spell::AddGOTarget(GameObject* go, uint32 effectMask)
             dist = 5.0f;
 
         if (!m_spellInfo->HasAttribute(SPELL_ATTR9_SPECIAL_DELAY_CALCULATION))
-            target.timeDelay = uint64(floor(dist / m_spellInfo->Speed * 1000.0f));
+            target.timeDelay = uint64(floor(dist / m_spellInfo->Speed * 1000.0f) + (m_spellInfo->LaunchDelay * 1000.0f));
         else
-            target.timeDelay = uint64(m_spellInfo->Speed * 1000.0f);
+            target.timeDelay = uint64((m_spellInfo->Speed * 1000.0f) + (m_spellInfo->LaunchDelay * 1000.0f));
 
         if (!m_delayMoment || m_delayMoment > target.timeDelay)
             m_delayMoment = target.timeDelay;
@@ -4769,8 +4797,7 @@ void Spell::TakePower()
             }
         }
 
-        int32 powerCost = cost.Amount;
-        CallScriptOnTakePowerHandlers(powerType, powerCost);
+        CallScriptOnTakePowerHandlers(cost);
 
         if (powerType == POWER_RUNES)
         {
@@ -4778,13 +4805,13 @@ void Spell::TakePower()
             continue;
         }
 
-        if (!powerCost)
+        if (!cost.Amount)
             continue;
 
         // health as power used
         if (powerType == POWER_HEALTH)
         {
-            m_caster->ModifyHealth(-powerCost);
+            m_caster->ModifyHealth(-cost.Amount);
             continue;
         }
 
@@ -4795,9 +4822,9 @@ void Spell::TakePower()
         }
 
         if (hit)
-            m_caster->ModifyPower(powerType, -powerCost);
-        else if (powerCost > 0)
-            m_caster->ModifyPower(powerType, -irand(0, powerCost / 4));
+            m_caster->ModifyPower(powerType, -cost.Amount);
+        else if (cost.Amount > 0)
+            m_caster->ModifyPower(powerType, -irand(0, cost.Amount / 4));
     }
 }
 
@@ -7420,10 +7447,10 @@ SpellCastResult Spell::CanOpenLock(uint32 effIndex, uint32 lockId, SkillType& sk
 
                     // castitem check: rogue using skeleton keys. the skill values should not be added in this case.
                     skillValue = 0;
-                    if (!m_CastItem && m_caster->GetTypeId() == TYPEID_PLAYER)
-                        skillValue = m_caster->ToPlayer()->GetSkillValue(skillId);
-                    else if (lockInfo->Index[j] == LOCKTYPE_PICKLOCK)
+                    if (lockInfo->Index[j] == LOCKTYPE_PICKLOCK)
                         skillValue = m_caster->getLevel() * 5;
+                    else if (!m_CastItem && m_caster->IsPlayer())
+                        skillValue = m_caster->ToPlayer()->GetSkillValue(skillId);
 
                     // skill bonus provided by casting spell (mostly item spells)
                     // add the effect base points modifier from the spell cast (cheat lock / skeleton key etc.)
@@ -7456,7 +7483,7 @@ void Spell::SetSpellValue(SpellValueMod mod, int32 value)
 
     if (mod >= SPELLVALUE_TRIGGER_SPELL && mod < SPELLVALUE_TRIGGER_SPELL_END)
     {
-        if (SpellEffectInfo const* effect = GetEffect(mod - SPELLVALUE_TRIGGER_SPELL))
+        if (GetEffect(mod - SPELLVALUE_TRIGGER_SPELL) != nullptr)
             m_spellValue->EffectTriggerSpell[mod - SPELLVALUE_TRIGGER_SPELL] = (uint32)value;
         return;
     }
@@ -7549,14 +7576,14 @@ void Spell::CallScriptAfterCastHandlers()
     }
 }
 
-void Spell::CallScriptOnTakePowerHandlers(Powers& power, int32& powerCost)
+void Spell::CallScriptOnTakePowerHandlers(SpellPowerCost& powerCost)
 {
     for (auto scritr = m_loadedScripts.begin(); scritr != m_loadedScripts.end(); ++scritr)
     {
         (*scritr)->_PrepareScriptCall(SPELL_SCRIPT_HOOK_TAKE_POWER);
         auto hookItrEnd = (*scritr)->OnTakePower.end(), hookItr = (*scritr)->OnTakePower.begin();
         for (; hookItr != hookItrEnd; ++hookItr)
-            (*hookItr).Call(*scritr, power, powerCost);
+            (*hookItr).Call(*scritr, powerCost);
 
         (*scritr)->_FinishScriptCall();
     }

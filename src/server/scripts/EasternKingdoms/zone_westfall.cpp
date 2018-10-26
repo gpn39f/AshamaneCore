@@ -67,11 +67,16 @@ public:
 
         uint32 SummonTimer;
         ObjectGuid PlayerGUID;
-        ObjectGuid Thug1GUID;
-        ObjectGuid Thug2GUID;
-        ObjectGuid Thug3GUID;
-        ObjectGuid Thug4GUID;
+        std::array<ObjectGuid, 4> ThugGUIDs;
         uint8 Phase;
+
+        std::vector<Position> const ThugPositions =
+        {
+            { -9859.36f, 1332.42f,  41.985f, 2.49f },
+            { -9862.51f, 1332.079f, 41.985f, 0.85f },
+            { -9863.49f, 1335.489f, 41.985f, 5.63f },
+            { -9860.42f, 1335.459f, 41.985f, 4.11f },
+        };
 
         bool bSummoned;
 
@@ -86,12 +91,12 @@ public:
         {
             ScriptedAI::MoveInLineOfSight(who);
 
-            if (who->GetTypeId() != TYPEID_PLAYER)
+            if (!who->IsPlayer())
                 return;
 
             if (who->ToPlayer()->GetQuestStatus(QUEST_LOUS_PARTING_THOUGHTS) == QUEST_STATUS_INCOMPLETE)
             {
-                if (who->IsWithinDistInMap(me, 10.0f) && !bSummoned)
+                if (who->IsWithinDistInMap(me, 20.0f) && !bSummoned)
                 {
                     PlayerGUID = who->GetGUID();
                     StartEvent();
@@ -103,19 +108,23 @@ public:
         {
             if(!bSummoned)
             {
-                if (Creature* Thug1 = me->SummonCreature(NPC_THUG, -9859.36f, 1332.42f, 41.985f, 2.495f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 90000))
-                    if (Creature* Thug2 = me->SummonCreature(NPC_THUG, -9862.51f, 1332.079f, 41.985f, 0.85f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 90000))
-                        if (Creature* Thug3 = me->SummonCreature(NPC_THUG, -9863.49f, 1335.489f, 41.985f, 5.63f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 90000))
-                            if (Creature* Thug4 = me->SummonCreature(NPC_THUG, -9860.42f, 1335.459f, 41.985f, 4.11f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 90000))
-                            {
-                                Thug1GUID = Thug1->GetGUID();
-                                Thug2GUID = Thug2->GetGUID();
-                                Thug3GUID = Thug3->GetGUID();
-                                Thug4GUID = Thug4->GetGUID();
-                                bSummoned = true;
-                                SummonTimer = 2000;
-                            }
+                for (uint8 i = 0; i < 4; ++i)
+                {
+                    // Clean possible previous guid
+                    ThugGUIDs[i] = ObjectGuid::Empty;
+
+                    if (Creature* thug = me->SummonCreature(NPC_THUG, ThugPositions[i], TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 90000))
+                        ThugGUIDs[i] = thug->GetGUID();
+                }
+
+                bSummoned = true;
+                SummonTimer = 2000;
             }
+        }
+
+        Creature* GetThug(uint8 index)
+        {
+            return ObjectAccessor::GetCreature(*me, ThugGUIDs[index]);
         }
 
         void UpdateAI(uint32 diff) override
@@ -125,132 +134,124 @@ public:
                 if (bSummoned)
                 {
                     if (Player* player = ObjectAccessor::GetPlayer(*me, PlayerGUID))
-                        if (Creature* Thug1 = ObjectAccessor::GetCreature(*me, Thug1GUID))
-                            if (Creature* Thug2 = ObjectAccessor::GetCreature(*me, Thug2GUID))
-                                if (Creature* Thug3 = ObjectAccessor::GetCreature(*me, Thug3GUID))
-                                    if (Creature* Thug4 = ObjectAccessor::GetCreature(*me, Thug4GUID))
+                    {
+                        // TODO: Say move to ->creature_texts
+                        switch (Phase)
+                        {
+                            case 0:
+                            {
+                                if (Creature* thug = GetThug(0))
+                                    thug->Say("Did you... did you meet her?", LANG_UNIVERSAL);
+                                SummonTimer = 3500;
+                                Phase++;
+                                break;
+                            }
+                            case 1:
+                            {
+                                if (Creature* thug = GetThug(1))
+                                    thug->Say("Yep. She's for real?", LANG_UNIVERSAL);
+                                SummonTimer = 4000;
+                                Phase++;
+                                break;
+                            }
+                            case 2:
+                            {
+                                if (Creature* thug = GetThug(1))
+                                    thug->Say("She wanted me to tell you that she appreciates the job that we did for her on the Furlbrows. Gave me a pile o'gold to split with you all.", LANG_UNIVERSAL);
+                                SummonTimer = 7000;
+                                Phase++;
+                                break;
+                            }
+                            case 3:
+                            {
+                                if (Creature* thug = GetThug(2))
+                                    thug->Say(" See her face. It is really...", LANG_UNIVERSAL);
+                                SummonTimer = 4000;
+                                Phase++;
+                            }
+                            break;
+                            case 4:
+                            {
+                                for (uint8 i = 0; i < 4; ++i)
+                                    if (Creature* thug = GetThug(i))
+                                        thug->SetFacingToObject(player);
+
+                                SummonTimer = 1000;
+                                Phase++;
+                                break;
+                            }
+                            case 5:
+                            {
+                                if (Creature* thug = GetThug(0))
+                                    thug->Say("Whoa, what do we have here? Looks like we have ourselves an eavesdropper, boys.", LANG_UNIVERSAL);
+                                SummonTimer = 4500;
+                                Phase++;
+                                break;
+                            }
+                            case 6:
+                            {
+                                if (Creature* thug = GetThug(0))
+                                    thug->Say("Only one thing to do with a louisy, good-for-nothin eavesdropper.", LANG_UNIVERSAL);
+                                SummonTimer = 4500;
+                                Phase++;
+                                break;
+                            }
+                            case 7:
+                            {
+                                if (Creature* thug = GetThug(0))
+                                    thug->Say("DIE!!!", LANG_UNIVERSAL);
+                                SummonTimer = 2000;
+                                Phase++;
+                                break;
+                            }
+                            case 8:
+                            {
+                                for (uint8 i = 0; i < 4; ++i)
+                                {
+                                    if (Creature* thug = GetThug(i))
                                     {
-                                        switch (Phase)
-                                        { // Say move to ->creature_texts
-                                        case 0:
-                                            {
-                                                Thug1->Say("Did you... did you meet her?", LANG_UNIVERSAL);
-                                                SummonTimer = 3500;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 1:
-                                            {
-                                                Thug2->Say("Yep. She's for real?", LANG_UNIVERSAL);
-                                                SummonTimer = 4000;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 2:
-                                            {
-                                                Thug2->Say("She wanted me to tell you that she appreciates the job that we did for her on the Furlbrows. Gave me a pile o'gold to split with you all.", LANG_UNIVERSAL);
-                                                SummonTimer = 7000;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 3:
-                                            {
-                                                Thug3->Say(" See her face. It is really...", LANG_UNIVERSAL);
-                                                SummonTimer = 4000;
-                                                Phase++;
-                                            }
-                                            break;
-                                        case 4:
-                                            {
-                                                Thug1->SetFacingToObject(player);
-                                                Thug2->SetFacingToObject(player);
-                                                Thug3->SetFacingToObject(player);
-                                                Thug4->SetFacingToObject(player);
-                                                SummonTimer = 1000;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 5:
-                                            {
-                                                Thug1->Say("Whoa, what do we have here? Looks like we have ourselves an eavesdropper, boys.", LANG_UNIVERSAL);
-                                                SummonTimer = 4500;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 6:
-                                            {
-                                                Thug1->Say("Only one thing to do with a louisy, good-for-nothin eavesdropper.", LANG_UNIVERSAL);
-                                                SummonTimer = 4500;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 7:
-                                            {
-                                                Thug1->Say("DIE!!!", LANG_UNIVERSAL);
-                                                SummonTimer = 2000;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 8:
-                                            {
-                                                Thug1->SetReactState(REACT_AGGRESSIVE);
-                                                Thug1->setFaction(14);
-                                                Thug1->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
-                                                Thug2->SetReactState(REACT_AGGRESSIVE);
-                                                Thug2->setFaction(14);
-                                                Thug2->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
-                                                Thug3->SetReactState(REACT_AGGRESSIVE);
-                                                Thug3->setFaction(14);
-                                                Thug3->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
-                                                Thug4->SetReactState(REACT_AGGRESSIVE);
-                                                Thug4->setFaction(14);
-                                                Thug4->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
-                                                SummonTimer = 1000;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 9:
-                                            {
-                                                Thug1->CombatStart(player, true);
-                                                Thug2->CombatStart(player, true);
-                                                Thug3->CombatStart(player, true);
-                                                Thug4->CombatStart(player, true);
-                                                SummonTimer = 5000;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 10:
-                                            {
-                                                if (Player* player = ObjectAccessor::GetPlayer(*me, PlayerGUID))
-                                                    player->KilledMonsterCredit(42417, PlayerGUID);
-                                                SummonTimer = 2500;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 11:
-                                            {
-                                                player->CastSpell(player, 79346, true);
-                                                me->TextEmote("Hurry back to the Furlbrow's Cottage", 0, true);
-                                                if (player->GetQuestStatus(QUEST_LOUS_PARTING_THOUGHTS) == QUEST_STATUS_COMPLETE)
-                                                {
-                                                    if (Creature* two = me->FindNearestCreature(42405, 200.0f, true))
-                                                    {
-                                                        me->SummonCreature(42558, -9854.51f, 1274.6f, 40.8704f, 2.04631f);
-                                                        me->SummonCreature(42560, -9854.66f, 1276.48f, 40.8834f, 3.36577f);
-                                                        two->SetVisible(false);
-                                                    }
-                                                }
-                                                SummonTimer = 15000;
-                                                Phase++;
-                                                break;
-                                            }
-                                        case 12:
-                                            Reset();
-                                            break;
-                                        default:
-                                            break;
-                                        }
+                                        thug->SetReactState(REACT_AGGRESSIVE);
+                                        thug->setFaction(14);
+                                        thug->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PVP_ATTACKABLE);
                                     }
+                                }
+
+                                SummonTimer = 1000;
+                                Phase++;
+                                break;
+                            }
+                            case 9:
+                            {
+                                for (uint8 i = 0; i < 4; ++i)
+                                    if (Creature* thug = GetThug(i))
+                                        thug->CombatStart(player, true);
+
+                                SummonTimer = 5000;
+                                Phase++;
+                                break;
+                            }
+                            case 10:
+                            {
+                                if (Player* player = ObjectAccessor::GetPlayer(*me, PlayerGUID))
+                                    player->KilledMonsterCredit(42417, PlayerGUID);
+                                SummonTimer = 2500;
+                                Phase++;
+                                break;
+                            }
+                            case 11:
+                            {
+                                me->TextEmote("Hurry back to the Furlbrow's Cottage", 0, true);
+                                SummonTimer = 15000;
+                                Phase++;
+                                break;
+                            }
+                            case 12:
+                                Reset();
+                                break;
+                            default:
+                                break;
+                        }
+                    }
                 }
             }
             else SummonTimer -= diff;
@@ -1300,11 +1301,11 @@ class npc_rise_br : public CreatureScript
     {
         if (quest->GetQuestId() == QUEST_RISE_OF_THE_BROTHERHOOD)
         {
-            CAST_AI(npc_rise_br::npc_rise_brAI, creature->AI())->PlayerGUID = player->GetGUID();
+            ENSURE_AI(npc_rise_br::npc_rise_brAI, creature->AI())->PlayerGUID = player->GetGUID();
 
-            if(!(CAST_AI(npc_rise_br::npc_rise_brAI, creature->AI())->EventStarted))
+            if(!(ENSURE_AI(npc_rise_br::npc_rise_brAI, creature->AI())->EventStarted))
             {
-                CAST_AI(npc_rise_br::npc_rise_brAI, creature->AI())->EventStarted = true;
+                ENSURE_AI(npc_rise_br::npc_rise_brAI, creature->AI())->EventStarted = true;
             }
         }
         return true;
@@ -1344,6 +1345,8 @@ class npc_rise_br : public CreatureScript
         uint32 EventTimer;
 
         uint8 Phase;
+
+        char playername;
 
         bool EventStarted;
 
@@ -1458,17 +1461,18 @@ class npc_rise_br : public CreatureScript
                     if (Player* player = ObjectAccessor::GetPlayer(*me, PlayerGUID))
                     if (Creature* Hope = me->FindNearestCreature(NPC_HOPE, 50.0f, true))
                     if (Creature* Ripsnarl = me->FindNearestCreature(NPC_RIPSNARL, 50.0f, true))
-                    if (me->FindNearestCreature(NPC_HORATIO2, 50.0f, true))
-                    if (me->FindNearestCreature(NPC_DANUVIN, 50.0f, true))
-                    if (me->FindNearestCreature(NPC_GUARD, 50.0f, true))
-                    if (me->FindNearestCreature(NPC_INVESTIGATOR, 50.0f, true))
-                    if (me->FindNearestCreature(NPC_INVESTIGATOR3, 50.0f, true))
                     {
                         switch (Phase)
                         {
                             case 0:
                             {
-                                me->Say("I don't like this, $N. Stay alert!", LANG_UNIVERSAL);
+                                me->SummonCreature(NPC_HORATIO2, -10508.0f, 1047.54f, 60.518f, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 100000);
+                                me->SummonCreature(NPC_DANUVIN, -10510.0f, 1040.67f, 60.518f, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 100000);
+                                me->SummonCreature(NPC_GUARD, -10504.7f, 1042.87f, 60.518f, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 100000);
+                                me->SummonCreature(NPC_INVESTIGATOR, -10509.1f, 1048.56f, 60.518f, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 100000);
+                                me->SummonCreature(NPC_INVESTIGATOR3, -10506.3f, 1047.7f, 60.518f, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 100000);
+                                std::string l_Msg = "I don't like this, " + std::string(player->GetName()) + ". Stay alert!";
+                                me->Say(l_Msg, LANG_UNIVERSAL);
                                 EventTimer = 4000;
                                 Phase++;
                                 break;
@@ -1491,14 +1495,14 @@ class npc_rise_br : public CreatureScript
                             }
                             case 3:
                             {
-                                me->Say("Hope! What...", LANG_UNIVERSAL);
+                                me->Say("Hope! Wha...", LANG_UNIVERSAL);
                                 EventTimer = 1500;
                                 Phase++;
                                 break;
                             }
                             case 4:
                             {
-                                Hope->Say("Hope? Is that what I was supposed fell when I saw my father decapitated by your henchmen?", LANG_UNIVERSAL);
+                                Hope->Say("Hope? Is that what I was supposed to feel when I saw my father decapitated by your henchmen?", LANG_UNIVERSAL);
                                 EventTimer = 12000;
                                 Phase++;
                                 break;
@@ -1588,7 +1592,8 @@ class npc_rise_br : public CreatureScript
                             case 16:
                             {
                                 Hope->SetFacingToObject(player);
-                                Hope->Say("And you, $N. I will spare your life. You have done much to help our cause, albeit unwittingly, but the next time we meet it will be as enemies.", LANG_UNIVERSAL);
+                                std::string l_Msg = "And you, " + std::string(player->GetName()) + ".  I will spare your life. You have done much to help our cause, albeit unwittingly, but the next time we meet it will be as enemies.";
+                                Hope->Say(l_Msg, LANG_UNIVERSAL);
                                 Ripsnarl->GetMotionMaster()->MovePoint(4, -10516.64f, 1064.78f, 55.362f);
                                 EventTimer = 8000;
                                 Phase++;
@@ -1614,7 +1619,7 @@ class npc_rise_br : public CreatureScript
                             case 19:
                             {
                                 Hope->Say("I took no pleasure in their deaths.", LANG_UNIVERSAL);
-                                SummonFireTrigger();
+                                //SummonFireTrigger(); // I cannot get this to work properly, leaving code in cae someone else works it out
                                 EventTimer = 5000;
                                 Phase++;
                                 break;
@@ -1628,7 +1633,8 @@ class npc_rise_br : public CreatureScript
                             }
                             case 21:
                             {
-                                me->Say("$N, get to Stormwind. Tell King Wrynn everything, EVERYTHING! GO NOW!", LANG_UNIVERSAL);
+                                std::string l_Msg = std::string(player->GetName()) + ", get to Stormwind. Tell King Wrynn everything, EVERYTHING! GO NOW!";
+                                me->Say(l_Msg, LANG_UNIVERSAL);
                                 Hope->GetMotionMaster()->MovePoint(6, -10518.38f, 1067.99f, 54.84f);
                                 Ripsnarl->SetFacingToObject(Hope);
 

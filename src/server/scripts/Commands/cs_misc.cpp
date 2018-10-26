@@ -246,8 +246,8 @@ public:
         CellCoord cellCoord = Trinity::ComputeCellCoord(object->GetPositionX(), object->GetPositionY());
         Cell cell(cellCoord);
 
-        uint32 zoneId, areaId;
-        object->GetZoneAndAreaId(zoneId, areaId);
+        uint32 zoneId = object->GetZoneId();
+        uint32 areaId = object->GetAreaId();
         uint32 mapId = object->GetMapId();
 
         MapEntry const* mapEntry = sMapStore.LookupEntry(mapId);
@@ -1315,7 +1315,15 @@ public:
         {
             Tokenizer tokens(bonuses, ';');
             for (char const* token : tokens)
-                bonusListIDs.push_back(atoul(token));
+                if (token != 0)
+                    bonusListIDs.push_back(atoul(token));
+        }
+
+        char const* context = strtok(NULL, " ");
+        if (context)
+        {
+            std::set<uint32> bonusListIDset = sDB2Manager.GetItemBonusTree(itemId, atoi(context));
+            bonusListIDs.insert(bonusListIDs.end(), bonusListIDset.begin(), bonusListIDset.end());
         }
 
         Player* player = handler->GetSession()->GetPlayer();

@@ -1035,7 +1035,8 @@ class TC_GAME_API Unit : public WorldObject
         bool IsVehicle() const  { return (m_unitTypeMask & UNIT_MASK_VEHICLE) != 0; }
 
         uint8 getLevel() const { return uint8(GetUInt32Value(UNIT_FIELD_LEVEL)); }
-        uint8 GetLevelForTarget(WorldObject const* /*target*/) const override { return getLevel(); }
+        uint8 GetEffectiveLevel() const { return uint8(GetUInt32Value(UNIT_FIELD_EFFECTIVE_LEVEL) != 0 ? GetUInt32Value(UNIT_FIELD_EFFECTIVE_LEVEL) : GetUInt32Value(UNIT_FIELD_LEVEL)); }
+        uint8 GetLevelForTarget(WorldObject const* /*target*/) const override { return GetEffectiveLevel(); }
         void SetLevel(uint8 lvl);
         uint8 getRace() const { return GetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_RACE); }
         uint64 getRaceMask() const { return UI64LIT(1) << (getRace() - 1); }
@@ -1303,6 +1304,7 @@ class TC_GAME_API Unit : public WorldObject
 
         void NearTeleportTo(Position const& pos, bool casting = false);
         void NearTeleportTo(float x, float y, float z, float orientation, bool casting = false) { NearTeleportTo(Position(x, y, z, orientation), casting); }
+        void NearTeleportTo(uint32 worldSafeLocId, bool casting = false);
         void SendTeleportPacket(Position const& pos);
         virtual bool UpdatePosition(float x, float y, float z, float ang, bool teleport = false);
         // returns true if unit's position really changed
@@ -1327,6 +1329,7 @@ class TC_GAME_API Unit : public WorldObject
         bool SetDisableGravity(bool disable);
         bool SetFall(bool enable);
         bool SetSwim(bool enable);
+        bool SetFlying(bool enable);
         bool SetCanFly(bool enable);
         bool SetWaterWalking(bool enable);
         bool SetFeatherFall(bool enable);
@@ -1630,6 +1633,7 @@ class TC_GAME_API Unit : public WorldObject
         bool IsInFeralForm() const;
 
         bool IsInDisallowedMountForm() const;
+        bool IsDisallowedMountForm(uint32 spellId, ShapeshiftForm form, uint32 displayId) const;
 
         float m_modMeleeHitChance;
         float m_modRangedHitChance;
@@ -1714,7 +1718,7 @@ class TC_GAME_API Unit : public WorldObject
         uint32 GetDisplayId() const { return GetUInt32Value(UNIT_FIELD_DISPLAYID); }
         virtual void SetDisplayId(uint32 modelId);
         uint32 GetNativeDisplayId() const { return GetUInt32Value(UNIT_FIELD_NATIVEDISPLAYID); }
-        void RestoreDisplayId();
+        void RestoreDisplayId(bool ignorePositiveAurasPreventingMounting = false);
         void SetNativeDisplayId(uint32 modelId) { SetUInt32Value(UNIT_FIELD_NATIVEDISPLAYID, modelId); }
         void setTransForm(uint32 spellid) { m_transform = spellid;}
         uint32 getTransForm() const { return m_transform;}
@@ -1997,7 +2001,7 @@ class TC_GAME_API Unit : public WorldObject
         GameObjectList m_gameObj;
 
         typedef std::vector<AreaTrigger*> AreaTriggerList;
-        AreaTriggerList m_areaTrigger;
+        std::unordered_map<ObjectGuid, uint32/*spellId*/> m_areaTriggers;
 
         uint32 m_transform;
 

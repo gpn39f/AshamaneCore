@@ -17,6 +17,7 @@
  */
 
 #include "ScriptMgr.h"
+#include "Area.h"
 #include "AreaTrigger.h"
 #include "AreaTriggerAI.h"
 #include "Chat.h"
@@ -1117,11 +1118,9 @@ private:
 
 // Utility macros for looping over scripts.
 #define FOR_SCRIPTS(T, C, E) \
-    if (SCR_REG_LST(T).empty()) \
-        return; \
-    \
-    for (SCR_REG_ITR(T) C = SCR_REG_LST(T).begin(); \
-        C != SCR_REG_LST(T).end(); ++C)
+    if (!SCR_REG_LST(T).empty()) \
+        for (SCR_REG_ITR(T) C = SCR_REG_LST(T).begin(); \
+            C != SCR_REG_LST(T).end(); ++C)
 
 #define FOR_SCRIPTS_RET(T, C, E, R) \
     if (SCR_REG_LST(T).empty()) \
@@ -2370,12 +2369,12 @@ void ScriptMgr::OnPlayerBindToInstance(Player* player, Difficulty difficulty, ui
     FOREACH_SCRIPT(PlayerScript)->OnBindToInstance(player, difficulty, mapid, permanent, extendState);
 }
 
-void ScriptMgr::OnPlayerUpdateZone(Player* player, uint32 newZone, uint32 oldZone, uint32 newArea)
+void ScriptMgr::OnPlayerUpdateZone(Player* player, Area* newArea, Area* oldArea)
 {
-    FOREACH_SCRIPT(PlayerScript)->OnUpdateZone(player, newZone, oldZone, newArea);
+    FOREACH_SCRIPT(PlayerScript)->OnUpdateZone(player, newArea, oldArea);
 }
 
-void ScriptMgr::OnPlayerUpdateArea(Player* player, uint32 newArea, uint32 oldArea)
+void ScriptMgr::OnPlayerUpdateArea(Player* player, Area* newArea, Area* oldArea)
 {
     FOREACH_SCRIPT(PlayerScript)->OnUpdateArea(player, newArea, oldArea);
 }
@@ -2601,10 +2600,10 @@ void ScriptMgr::OnHeal(Unit* healer, Unit* reciever, uint32& gain)
     FOREACH_SCRIPT(PlayerScript)->OnHeal(healer, reciever, gain);
 }
 
-void ScriptMgr::OnDamage(Unit* attacker, Unit* victim, uint32& damage)
+void ScriptMgr::OnDamage(Unit* attacker, Unit* victim, uint32& damage, SpellInfo const* spellProto)
 {
-    FOREACH_SCRIPT(UnitScript)->OnDamage(attacker, victim, damage);
-    FOREACH_SCRIPT(PlayerScript)->OnDamage(attacker, victim, damage);
+    FOREACH_SCRIPT(UnitScript)->OnDamage(attacker, victim, damage, spellProto);
+    FOREACH_SCRIPT(PlayerScript)->OnDamage(attacker, victim, damage, spellProto);
 }
 
 void ScriptMgr::ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage)
@@ -2619,10 +2618,10 @@ void ScriptMgr::ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage)
     FOREACH_SCRIPT(PlayerScript)->ModifyMeleeDamage(target, attacker, damage);
 }
 
-void ScriptMgr::ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage)
+void ScriptMgr::ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage, SpellInfo const* spellInfo)
 {
-    FOREACH_SCRIPT(UnitScript)->ModifySpellDamageTaken(target, attacker, damage);
-    FOREACH_SCRIPT(PlayerScript)->ModifySpellDamageTaken(target, attacker, damage);
+    FOREACH_SCRIPT(UnitScript)->ModifySpellDamageTaken(target, attacker, damage, spellInfo);
+    FOREACH_SCRIPT(PlayerScript)->ModifySpellDamageTaken(target, attacker, damage, spellInfo);
 }
 
 // Conversation

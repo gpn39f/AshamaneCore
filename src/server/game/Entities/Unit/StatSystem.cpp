@@ -1139,6 +1139,7 @@ void Guardian::UpdateMaxHealth()
                     pctFromOwnerHealth = 20.f;
                     break;
                 case ENTRY_GHOUL:
+                case ENTRY_ABOMINATION:
                     pctFromOwnerHealth = 35.f;
                     break;
                 case ENTRY_XUEN:
@@ -1238,9 +1239,18 @@ void Guardian::UpdateAttackPowerAndDamage(bool ranged)
                     break;
                 case ENTRY_IMP:
                     value = CalculatePct(m_owner->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC), 100.f);
+                    break;
                 case ENTRY_VOIDWALKER:
                     value = CalculatePct(m_owner->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC), 120.f);
+                    break;
+                case ENTRY_GHOUL:
+                case ENTRY_ABOMINATION:
+                    value = CalculatePct(m_owner->GetTotalAttackPowerValue(BASE_ATTACK), 50.f);
+                    break;
                 default:
+                    value = CalculatePct(m_owner->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC), 100.f);
+                    if (!value)
+                        value = CalculatePct(m_owner->GetTotalAttackPowerValue(BASE_ATTACK), 100.f);
                     break;
             }
             break;
@@ -1331,9 +1341,7 @@ void Guardian::UpdateDamagePhysical(WeaponAttackType attType)
 
 void Guardian::UpdateSpellPower()
 {
-    // WL pets/minions get 100% of owners SP
-    // need some more proofs which are affected and which arent
-    if (IsWarlockMinion())
+    if (HasSameSpellPowerAsOwner())
         SetBonusDamage(m_owner->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_MAGIC));
 }
 

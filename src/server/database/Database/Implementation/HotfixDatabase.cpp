@@ -101,8 +101,8 @@ void HotfixDatabaseConnection::DoPrepareStatements()
         "Difficulty7, Difficulty8, Difficulty9, Difficulty10 FROM artifact_quest_xp ORDER BY ID DESC", CONNECTION_SYNCH);
 
     // ArtifactTier.db2
-    PrepareStatement(HOTFIX_SEL_ARTIFACT_TIER, "SELECT ID, ArtifactTier, MaxNumTraits, MaxArtifactKnowledge, KnowledgePlayerCondition, MinimumEmpowerKnowledge FROM artifact_tier"
-        " ORDER BY ID DESC", CONNECTION_SYNCH);
+    PrepareStatement(HOTFIX_SEL_ARTIFACT_TIER, "SELECT ID, ArtifactTier, MaxNumTraits, MaxArtifactKnowledge, KnowledgePlayerCondition, "
+        "MinimumEmpowerKnowledge FROM artifact_tier ORDER BY ID DESC", CONNECTION_SYNCH);
 
     // ArtifactUnlock.db2
     PrepareStatement(HOTFIX_SEL_ARTIFACT_UNLOCK, "SELECT ID, ItemBonusListID, PowerRank, PowerID, PlayerConditionID, ArtifactID FROM artifact_unlock"
@@ -382,6 +382,18 @@ void HotfixDatabaseConnection::DoPrepareStatements()
     PREPARE_LOCALE_STMT(HOTFIX_SEL_GARR_FOLLOWER, "SELECT ID, HordeSourceText_lang, AllianceSourceText_lang, TitleName_lang FROM garr_follower_locale"
         " WHERE locale = ?", CONNECTION_SYNCH);
 
+    // GarrFollowerType.db2
+    PrepareStatement(HOTFIX_SEL_GARR_FOLLOWER_TYPE, "SELECT ID, MaxItemLevel, MaxFollowers, MaxFollowerBuildingType, GarrTypeId, LevelRangeBias, ItemLevelRangeBias, Flags FROM garr_follower_type"
+        " ORDER BY ID DESC", CONNECTION_SYNCH);
+
+    // GarrFollowerLevelXP.db2
+    PrepareStatement(HOTFIX_SEL_GARR_FOLLOWER_LEVEL_XP, "SELECT ID, XpToNextLevel, ShipmentXP, FollowerLevel, GarrFollowerTypeId FROM garr_follower_level_xp"
+        " ORDER BY ID DESC", CONNECTION_SYNCH);
+
+    // GarrFollowerQuality.db2
+    PrepareStatement(HOTFIX_SEL_GARR_FOLLOWER_QUALITY, "SELECT ID, XpToNextQuality, ShipmentXP, Quality, AbilityCount, TraitCount, GarrFollowerTypeId, ClassSpecId FROM garr_follower_quality"
+        " ORDER BY ID DESC", CONNECTION_SYNCH);
+
     // GarrFollowerXAbility.db2
     PrepareStatement(HOTFIX_SEL_GARR_FOLLOWER_X_ABILITY, "SELECT ID, GarrAbilityID, FactionIndex, GarrFollowerID FROM garr_follower_x_ability"
         " ORDER BY ID DESC", CONNECTION_SYNCH);
@@ -627,6 +639,19 @@ void HotfixDatabaseConnection::DoPrepareStatements()
 
     // ItemXBonusTree.db2
     PrepareStatement(HOTFIX_SEL_ITEM_X_BONUS_TREE, "SELECT ID, ItemBonusTreeID, ItemID FROM item_x_bonus_tree ORDER BY ID DESC", CONNECTION_SYNCH);
+
+    // JournalEncounter.db2
+    PrepareStatement(HOTFIX_SEL_JOURNAL_ENCOUNTER, "SELECT ID, Name, Description, Map_1, Map_2, DungeonMapID, WorldMapAreaID, FirstSectionID, JournalInstanceID, "
+        "DifficultyMask, Flags, OrderIndex, MapDisplayConditionID FROM journal_encounter ORDER BY ID DESC", CONNECTION_SYNCH);
+    PREPARE_LOCALE_STMT(HOTFIX_SEL_JOURNAL_ENCOUNTER, "SELECT ID, Name_lang, Description_lang FROM journal_encounter_locale WHERE locale = ?", CONNECTION_SYNCH);
+
+    // JournalEncounterItem.db2
+    PrepareStatement(HOTFIX_SEL_JOURNAL_ENCOUNTER_ITEM, "SELECT ItemID, JournalEncounterID, DifficultyMask, FactionMask, Flags, ID FROM journal_encounter_item ORDER BY ID DESC", CONNECTION_SYNCH);
+
+    // JournalInstance.db2
+    PrepareStatement(HOTFIX_SEL_JOURNAL_INSTANCE, "SELECT Name, Description, ButtonFileDataID, ButtonSmallFileDataID, BackgroundFileDataID, LoreFileDataID, MapID, AreaID, OrderIndex, Flags, ID "
+        "FROM journal_instance ORDER BY ID DESC", CONNECTION_SYNCH);
+    PREPARE_LOCALE_STMT(HOTFIX_SEL_JOURNAL_INSTANCE, "SELECT ID, Name_lang, Description_lang FROM journal_instance_locale WHERE locale = ?", CONNECTION_SYNCH);
 
     // Keychain.db2
     PrepareStatement(HOTFIX_SEL_KEYCHAIN, "SELECT ID, Key1, Key2, Key3, Key4, Key5, Key6, Key7, Key8, Key9, Key10, Key11, Key12, Key13, Key14, Key15, "

@@ -266,10 +266,10 @@ struct ArtifactUnlockEntry
 {
     uint32 ID;
     uint16 ItemBonusListID;
-    uint8  PowerRank;
+    uint8 PowerRank;
     uint32 PowerID;
     uint32 PlayerConditionID;
-    uint8  ArtifactID;
+    uint8 ArtifactID;
 };
 
 struct AuctionHouseEntry
@@ -1228,12 +1228,45 @@ struct GarrFollowerEntry
     uint32 ID;
 };
 
+struct GarrFollowerLevelXPEntry
+{
+    uint32 ID;
+    uint16 XpToNextLevel;
+    uint16 ShipmentXP;
+    uint8 FollowerLevel;
+    uint8 GarrFollowerTypeId;
+};
+
+struct GarrFollowerQualityEntry
+{
+    uint32 ID;
+    uint32 XpToNextQuality;
+    uint16 ShipmentXP;
+    uint8 Quality;
+    uint8 AbilityCount;
+    uint8 TraitCount;
+    uint8 GarrFollowerTypeId;
+    uint32 ClassSpecId;
+};
+
 struct GarrFollowerXAbilityEntry
 {
     uint32 ID;
     uint16 GarrAbilityID;
     uint8 FactionIndex;
     uint16 GarrFollowerID;
+};
+
+struct GarrFollowerTypeEntry
+{
+    uint32 ID;
+    uint16 MaxItemLevel;
+    uint8 MaxFollowers;
+    uint8 MaxFollowerBuildingType;
+    uint8 GarrTypeId;
+    uint8 LevelRangeBias;
+    uint8 ItemLevelRangeBias;
+    uint8 Flags;
 };
 
 struct GarrMissionEntry
@@ -1843,6 +1876,52 @@ struct ItemXBonusTreeEntry
     int32 ItemID;
 };
 
+struct JournalEncounterEntry
+{
+    uint32 ID;
+    LocalizedString* Name;
+    LocalizedString* Description;
+    float Map[2];
+    uint16 DungeonMapID;
+    uint16 WorldMapAreaID;
+    uint16 FirstSectionID;
+    uint16 JournalInstanceID;
+    uint8 DifficultyMask;
+    uint8 Flags;
+    uint32 OrderIndex;
+    uint32 MapDisplayConditionID;
+};
+
+struct JournalEncounterItemEntry
+{
+    uint32 ItemID;
+    uint16 JournalEncounterID;
+    uint8 DifficultyMask;
+    uint8 FactionMask;
+    uint8 Flags;
+    uint32 ID;
+
+    bool IsValidDifficultyMask(uint8 mask) const
+    {
+        return !DifficultyMask || DifficultyMask & mask;
+    }
+};
+
+struct JournalInstanceEntry
+{
+    LocalizedString* Name;
+    LocalizedString* Description;
+    uint32 ButtonFileDataID;
+    uint32 ButtonSmallFileDataID;
+    uint32 BackgroundFileDataID;
+    uint32 LoreFileDataID;
+    uint16 MapID;
+    uint16 AreaID;
+    uint8 OrderIndex;
+    uint8 Flags;
+    uint32 ID;
+};
+
 #define KEYCHAIN_SIZE   32
 
 struct KeychainEntry
@@ -1935,6 +2014,24 @@ struct LockEntry
     uint16 Skill[MAX_LOCK_CASE];
     uint8 Type[MAX_LOCK_CASE];
     uint8 Action[MAX_LOCK_CASE];
+
+    bool HasMining() const
+    {
+        for (uint8 type : Type)
+            if (type == LOCKTYPE_MINING_1 || (type >= LOCKTYPE_MINING_2 && type <= LOCKTYPE_MINING_9))
+                return true;
+
+        return false;
+    }
+
+    bool HasHerbalism() const
+    {
+        for (uint8 type : Type)
+            if (type == LOCKTYPE_HERBALISM_1 || (type >= LOCKTYPE_HERBALISM_2 && type <= LOCKTYPE_HERBALISM_9))
+                return true;
+
+        return false;
+    }
 };
 
 struct MailTemplateEntry

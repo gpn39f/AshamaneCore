@@ -326,7 +326,7 @@ bool Creature::InitEntry(uint32 entry, CreatureData const* data /*= nullptr*/)
 
     // get difficulty 1 mode entry
     CreatureTemplate const* cinfo = nullptr;
-    DifficultyEntry const* difficultyEntry = sDifficultyStore.LookupEntry(GetMap()->GetSpawnMode());
+    DifficultyEntry const* difficultyEntry = sDifficultyStore.LookupEntry(GetMap()->GetDifficultyID());
     while (!cinfo && difficultyEntry)
     {
         int32 idx = CreatureTemplate::DifficultyIDToDifficultyEntryIndex(difficultyEntry->ID);
@@ -419,7 +419,7 @@ bool Creature::InitEntry(uint32 entry, CreatureData const* data /*= nullptr*/)
     return true;
 }
 
-bool Creature::UpdateEntry(uint32 entry, CreatureData const* data /*= nullptr*/, bool updateLevel /* = true */)
+bool Creature::UpdateEntry(uint32 entry, CreatureData const* data /*= nullptr*/, bool updateLevel /* = true */, bool updateScript /*= false*/)
 {
     if (!InitEntry(entry, data))
         return false;
@@ -507,6 +507,10 @@ bool Creature::UpdateEntry(uint32 entry, CreatureData const* data /*= nullptr*/,
 
     UpdateMovementFlags();
     LoadCreaturesAddon();
+
+    if (updateScript)
+        AIM_Initialize();
+
     return true;
 }
 
@@ -672,7 +676,11 @@ void Creature::Update(uint32 diff)
                 // do not allow the AI to be changed during update
                 m_AI_locked = true;
                 i_AI->UpdateOperations(diff);
-                i_AI->UpdateAI(diff);
+
+                // Recheck in case UpdateOperations changed the AI (creature destroy, etc)
+                if (i_AI)
+                    i_AI->UpdateAI(diff);
+
                 m_AI_locked = false;
             }
 
@@ -913,6 +921,8 @@ bool Creature::Create(ObjectGuid::LowType guidlow, Map* map, uint32 entry, float
         return false;
     }
 
+    m_area = sAreaMgr->GetArea(GetAreaIdFromPosition());
+
     if (!CreateFromProto(guidlow, entry, data, vehId))
         return false;
 
@@ -1135,10 +1145,10 @@ void Creature::SaveToDB()
     }
 
     uint32 mapId = GetTransport() ? GetTransport()->GetGOInfo()->moTransport.SpawnMap : GetMapId();
-    SaveToDB(mapId, data->spawnMask);
+    SaveToDB(mapId, data->spawnDifficulties);
 }
 
-void Creature::SaveToDB(uint32 mapid, uint64 spawnMask)
+void Creature::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDifficulties)
 {
     // update in loaded data
     if (!m_spawnId)
@@ -1206,7 +1216,7 @@ void Creature::SaveToDB(uint32 mapid, uint64 spawnMask)
     // prevent add data integrity problems
     data.movementType = !m_respawnradius && GetDefaultMovementType() == RANDOM_MOTION_TYPE
         ? IDLE_MOTION_TYPE : GetDefaultMovementType();
-    data.spawnMask = spawnMask;
+    data.spawnDifficulties = spawnDifficulties;
     data.npcflag = npcflag;
     data.unit_flags = unitFlags;
     data.unit_flags2 = unitFlags2;
@@ -1229,7 +1239,7 @@ void Creature::SaveToDB(uint32 mapid, uint64 spawnMask)
     stmt->setUInt64(index++, m_spawnId);
     stmt->setUInt32(index++, GetEntry());
     stmt->setUInt16(index++, uint16(mapid));
-    stmt->setUInt64(index++, spawnMask);
+    stmt->setString(index++, StringJoin(data.spawnDifficulties, ","));
     stmt->setUInt32(index++, data.phaseId);
     stmt->setUInt32(index++, data.phaseGroup);
     stmt->setUInt32(index++, displayId);
@@ -1261,11 +1271,11 @@ void Creature::SelectLevel()
     // level
     uint8 minlevel = std::min(cInfo->maxlevel, cInfo->minlevel);
     uint8 maxlevel = std::max(cInfo->maxlevel, cInfo->minlevel);
-    uint8 level = minlevel == maxlevel ? minlevel : urand(minlevel, maxlevel);
-    SetLevel(level);
 
     if (HasScalableLevels())
     {
+        SetLevel(maxlevel);
+
         SetUInt32Value(UNIT_FIELD_SCALING_LEVEL_MIN, cInfo->levelScaling->MinLevel);
         SetUInt32Value(UNIT_FIELD_SCALING_LEVEL_MAX, cInfo->levelScaling->MaxLevel);
 
@@ -1274,6 +1284,11 @@ void Creature::SelectLevel()
         int8 delta = mindelta == maxdelta ? mindelta : irand(mindelta, maxdelta);
 
         SetInt32Value(UNIT_FIELD_SCALING_LEVEL_DELTA, delta);
+    }
+    else
+    {
+        uint8 level = minlevel == maxlevel ? minlevel : urand(minlevel, maxlevel);
+        SetLevel(level);
     }
 
     UpdateLevelDependantStats();
@@ -2604,7 +2619,7 @@ uint8 Creature::GetLevelForTarget(WorldObject const* target) const
     {
         if (isWorldBoss())
         {
-            uint8 level = unitTarget->getLevel() + sWorld->getIntConfig(CONFIG_WORLD_BOSS_LEVEL_DIFF);
+            uint8 level = unitTarget->GetEffectiveLevel() + sWorld->getIntConfig(CONFIG_WORLD_BOSS_LEVEL_DIFF);
             return RoundToInterval<uint8>(level, 1u, 255u);
         }
 
@@ -2612,7 +2627,7 @@ uint8 Creature::GetLevelForTarget(WorldObject const* target) const
         // between UNIT_FIELD_SCALING_LEVEL_MIN and UNIT_FIELD_SCALING_LEVEL_MAX
         if (HasScalableLevels())
         {
-            uint8 targetLevelWithDelta = unitTarget->getLevel() + GetInt32Value(UNIT_FIELD_SCALING_LEVEL_DELTA);
+            uint8 targetLevelWithDelta = unitTarget->GetEffectiveLevel() + GetInt32Value(UNIT_FIELD_SCALING_LEVEL_DELTA);
 
             if (target->IsPlayer())
                 targetLevelWithDelta += target->GetUInt32Value(PLAYER_FIELD_SCALING_PLAYER_LEVEL_DELTA);
@@ -2636,9 +2651,9 @@ std::string Creature::GetScriptName() const
 
 uint32 Creature::GetScriptId() const
 {
-	uint32 scriptId = 0;
+    uint32 scriptId = 0;
     if (CreatureData const* creatureData = GetCreatureData())
-		scriptId = creatureData->ScriptId;
+        scriptId = creatureData->ScriptId;
 
     return scriptId ? scriptId : sObjectMgr->GetCreatureTemplate(GetEntry())->ScriptID;
 }
@@ -3089,151 +3104,152 @@ bool Creature::CanGiveExperience() const
 
 void Creature::ReLoad(bool skipDB)
 {
-	uint32 entry = GetEntry();
+    uint32 entry = GetEntry();
 
-	InterruptNonMeleeSpells(false);
-	RemoveAllAuras();
+    InterruptNonMeleeSpells(false);
+    RemoveAllAuras();
 
-	PreparedQueryResult result;
-	if (!skipDB)
-	{
-		PreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_TEMPLATE);
-		stmt->setUInt32(0, entry);
-		result = WorldDatabase.Query(stmt);
+    PreparedQueryResult result;
+    if (!skipDB)
+    {
+        PreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_TEMPLATE);
+        stmt->setUInt32(0, entry);
+        result = WorldDatabase.Query(stmt);
 
-		if (!result)
-		{
-			TC_LOG_ERROR("sql.sql", "Creature template %u not found for reload", GetEntry());
-			return;
-		}
+        if (!result)
+        {
+            TC_LOG_ERROR("sql.sql", "Creature template %u not found for reload", GetEntry());
+            return;
+        }
 
-		Field* fields = result->Fetch();
-		sObjectMgr->LoadCreatureTemplate(fields);
-		sObjectMgr->LoadCreatureModelInfo();
-		sObjectMgr->LoadCreatureAddons();
-		sObjectMgr->LoadCreatureTemplateAddons();
-	}
+        Field* fields = result->Fetch();
+        sObjectMgr->LoadCreatureTemplate(fields);
+        sObjectMgr->LoadCreatureModelInfo();
+        sObjectMgr->LoadCreatureAddons();
+        sObjectMgr->LoadCreatureTemplateAddons();
+        sObjectMgr->LoadCreatureTemplateJournals();
+    }
 
-	CreatureTemplate const* cInfo = sObjectMgr->GetCreatureTemplate(entry);
-	if (!cInfo)
-	{
-		TC_LOG_ERROR("sql.sql", "Creature template info %u not found for reload", GetEntry());
-		return;
-	}
+    CreatureTemplate const* cInfo = sObjectMgr->GetCreatureTemplate(entry);
+    if (!cInfo)
+    {
+        TC_LOG_ERROR("sql.sql", "Creature template info %u not found for reload", GetEntry());
+        return;
+    }
 
-	CreatureData const* data = sObjectMgr->GetCreatureData(GetSpawnId());
-	if (!data)
-	{
-		TC_LOG_ERROR("sql.sql", "Creature SpawnID (" SI64FMTD ") does not exist, skipped re-loading.", GetSpawnId());
-		return;
-	}
+    CreatureData const* data = sObjectMgr->GetCreatureData(GetSpawnId());
+    if (!data)
+    {
+        TC_LOG_ERROR("sql.sql", "Creature SpawnID (" SI64FMTD ") does not exist, skipped re-loading.", GetSpawnId());
+        return;
+    }
 
-	if (!skipDB)
-	{
-		sObjectMgr->CheckCreatureTemplate(cInfo);
+    if (!skipDB)
+    {
+        sObjectMgr->CheckCreatureTemplate(cInfo);
 
-		QueryResult scriptQuery = WorldDatabase.PQuery("SELECT `ScriptName` FROM creature WHERE `guid` = %u", GetSpawnId());
-		if (!scriptQuery)
-		{
-			TC_LOG_ERROR("sql.sql", "Creature SpawnID (" SI64FMTD ") not found in creature table, skipped re-loading.", GetSpawnId());
-			return;
-		}
-		Field* fields = scriptQuery->Fetch();
-		CreatureData& cdata = sObjectMgr->NewOrExistCreatureData(GetSpawnId());
-		cdata.ScriptId = sObjectMgr->GetScriptId(fields[0].GetString());
-		if (!cdata.ScriptId)
-			cdata.ScriptId = cInfo->ScriptID;
-	}
+        QueryResult scriptQuery = WorldDatabase.PQuery("SELECT `ScriptName` FROM creature WHERE `guid` = %u", GetSpawnId());
+        if (!scriptQuery)
+        {
+            TC_LOG_ERROR("sql.sql", "Creature SpawnID (" SI64FMTD ") not found in creature table, skipped re-loading.", GetSpawnId());
+            return;
+        }
+        Field* fields = scriptQuery->Fetch();
+        CreatureData& cdata = sObjectMgr->NewOrExistCreatureData(GetSpawnId());
+        cdata.ScriptId = sObjectMgr->GetScriptId(fields[0].GetString());
+        if (!cdata.ScriptId)
+            cdata.ScriptId = cInfo->ScriptID;
+    }
 
-	if (data)
-	{
-		PhasingHandler::InitDbPhaseShift(GetPhaseShift(), data->phaseUseFlags, data->phaseId, data->phaseGroup);
-		PhasingHandler::InitDbVisibleMapId(GetPhaseShift(), data->terrainSwapMap);
-	}
+    if (data)
+    {
+        PhasingHandler::InitDbPhaseShift(GetPhaseShift(), data->phaseUseFlags, data->phaseId, data->phaseGroup);
+        PhasingHandler::InitDbVisibleMapId(GetPhaseShift(), data->terrainSwapMap);
+    }
 
-	//! Relocate before CreateFromProto, to initialize coords and allow
-	//! returning correct zone id for selecting OutdoorPvP/Battlefield script
-	Relocate(data->posX, data->posY, data->posZ, data->orientation);
+    //! Relocate before CreateFromProto, to initialize coords and allow
+    //! returning correct zone id for selecting OutdoorPvP/Battlefield script
+    Relocate(data->posX, data->posY, data->posZ, data->orientation);
 
-	// Check if the position is valid before calling CreateFromProto(), otherwise we might add Auras to Creatures at
-	// invalid position, triggering a crash about Auras not removed in the destructor
-	if (!IsPositionValid())
-	{
-		TC_LOG_ERROR("entities.unit", "Creature::Create(): given coordinates for creature (SpawnID " UI64FMTD ", entry %d) are not valid (X: %f, Y: %f, Z: %f, O: %f)", GetSpawnId(), GetEntry(), data->posX, data->posY, data->posZ, data->orientation);
-		return;
-	}
+    // Check if the position is valid before calling CreateFromProto(), otherwise we might add Auras to Creatures at
+    // invalid position, triggering a crash about Auras not removed in the destructor
+    if (!IsPositionValid())
+    {
+        TC_LOG_ERROR("entities.unit", "Creature::Create(): given coordinates for creature (SpawnID " UI64FMTD ", entry %d) are not valid (X: %f, Y: %f, Z: %f, O: %f)", GetSpawnId(), GetEntry(), data->posX, data->posY, data->posZ, data->orientation);
+        return;
+    }
 
-	if (!CreateFromProto(GetGUID().GetCounter(), entry, data, cInfo->VehicleId))
-		return;
+    if (!CreateFromProto(GetGUID().GetCounter(), entry, data, cInfo->VehicleId))
+        return;
 
-	switch (GetCreatureTemplate()->rank)
-	{
-	case CREATURE_ELITE_RARE:
-		m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_RARE);
-		break;
-	case CREATURE_ELITE_ELITE:
-		m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_ELITE);
-		break;
-	case CREATURE_ELITE_RAREELITE:
-		m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_RAREELITE);
-		break;
-	case CREATURE_ELITE_WORLDBOSS:
-		m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_WORLDBOSS);
-		break;
-	default:
-		m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_NORMAL);
-		break;
-	}
+    switch (GetCreatureTemplate()->rank)
+    {
+        case CREATURE_ELITE_RARE:
+            m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_RARE);
+            break;
+        case CREATURE_ELITE_ELITE:
+            m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_ELITE);
+            break;
+        case CREATURE_ELITE_RAREELITE:
+            m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_RAREELITE);
+            break;
+        case CREATURE_ELITE_WORLDBOSS:
+            m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_WORLDBOSS);
+            break;
+        default:
+            m_corpseDelay = sWorld->getIntConfig(CONFIG_CORPSE_DECAY_NORMAL);
+            break;
+    }
 
-	LoadCreaturesAddon();
+    LoadCreaturesAddon();
 
-	//! Need to be called after LoadCreaturesAddon - MOVEMENTFLAG_HOVER is set there
-	if (HasUnitMovementFlag(MOVEMENTFLAG_HOVER))
-	{
-		float z = data->posZ + GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
+    //! Need to be called after LoadCreaturesAddon - MOVEMENTFLAG_HOVER is set there
+    if (HasUnitMovementFlag(MOVEMENTFLAG_HOVER))
+    {
+        float z = data->posZ + GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
 
-		//! Relocate again with updated Z coord
-		Relocate(data->posX, data->posY, z, data->orientation);
-	}
+        //! Relocate again with updated Z coord
+        Relocate(data->posX, data->posY, z, data->orientation);
+    }
 
-	uint32 displayID = GetNativeDisplayId();
-	CreatureModelInfo const* minfo = sObjectMgr->GetCreatureModelRandomGender(&displayID);
-	if (minfo && !IsTotem())                               // Cancel load if no model defined or if totem
-	{
-		SetDisplayId(displayID);
-		SetNativeDisplayId(displayID);
-		SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, minfo->gender);
-	}
+    uint32 displayID = GetNativeDisplayId();
+    CreatureModelInfo const* minfo = sObjectMgr->GetCreatureModelRandomGender(&displayID);
+    if (minfo && !IsTotem())                               // Cancel load if no model defined or if totem
+    {
+        SetDisplayId(displayID);
+        SetNativeDisplayId(displayID);
+        SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, minfo->gender);
+    }
 
-	LastUsedScriptID = GetScriptId();
+    LastUsedScriptID = GetScriptId();
 
-	/// @todo Replace with spell, handle from DB
-	if (IsSpiritHealer() || IsSpiritGuide())
-	{
-		m_serverSideVisibility.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_GHOST);
-		m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_GHOST);
-	}
+    /// @todo Replace with spell, handle from DB
+    if (IsSpiritHealer() || IsSpiritGuide())
+    {
+        m_serverSideVisibility.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_GHOST);
+        m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_GHOST);
+    }
 
-	if (GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_IGNORE_PATHFINDING)
-		AddUnitState(UNIT_STATE_IGNORE_PATHFINDING);
+    if (GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_IGNORE_PATHFINDING)
+        AddUnitState(UNIT_STATE_IGNORE_PATHFINDING);
 
-	if (GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_IMMUNITY_KNOCKBACK)
-	{
-		ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_KNOCK_BACK, true);
-		ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_KNOCK_BACK_DEST, true);
-	}
+    if (GetCreatureTemplate()->flags_extra & CREATURE_FLAG_EXTRA_IMMUNITY_KNOCKBACK)
+    {
+        ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_KNOCK_BACK, true);
+        ApplySpellImmune(0, IMMUNITY_EFFECT, SPELL_EFFECT_KNOCK_BACK_DEST, true);
+    }
 
-	if (IsWildBattlePet())
-	{
-		m_wildBattlePet = new WildBattlePet(this);
-		m_wildBattlePet->Initialize();
-	}
-	AIM_Initialize();
+    if (IsWildBattlePet())
+    {
+        m_wildBattlePet = new WildBattlePet(this);
+        m_wildBattlePet->Initialize();
+    }
+    AIM_Initialize();
 
-	Respawn();
+    Respawn();
 
-	if (IsAIEnabled)
-		AI()->EnterEvadeMode();
+    if (IsAIEnabled)
+        AI()->EnterEvadeMode();
 
-	TC_LOG_DEBUG("sql.sql", "Creature SpawnID (" SI64FMTD ") reloaded.", GetSpawnId());
+    TC_LOG_DEBUG("sql.sql", "Creature SpawnID (" SI64FMTD ") reloaded.", GetSpawnId());
 }

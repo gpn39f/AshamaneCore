@@ -45,6 +45,7 @@
 #include "WorldSession.h"
 #include <sstream>
 #include <cstdarg>
+#include "SpellMgr.h"
 
 BossBoundaryData::~BossBoundaryData()
 {
@@ -395,6 +396,13 @@ bool InstanceScript::SetBossState(uint32 id, EncounterState state)
                     uint32 resInterval = GetCombatResurrectionChargeInterval();
                     InitializeCombatResurrections(1, resInterval);
                     SendEncounterStart(1, 9, resInterval, resInterval);
+
+                    Map::PlayerList const &playerList = instance->GetPlayers();
+                    if (!playerList.isEmpty())
+                        for (Map::PlayerList::const_iterator i = playerList.begin(); i != playerList.end(); ++i)
+                            if (Player* player = i->GetSource())
+                                if (player->IsAlive())
+                                    player->ProcSkillsAndAuras(nullptr, PROC_FLAG_ENCOUNTER_START, PROC_FLAG_NONE, PROC_SPELL_TYPE_MASK_ALL, PROC_SPELL_PHASE_NONE, PROC_HIT_NONE, nullptr, nullptr, nullptr);
                     break;
                 }
                 case FAIL:
@@ -1166,9 +1174,9 @@ void InstanceScript::StartChallengeMode(uint8 level)
     instance->SendToPlayers(WorldPackets::ChallengeMode::Reset(instance->GetId()).Write());
 
     WorldPackets::Misc::StartTimer startTimer;
-    startTimer.Type = 9;
-    startTimer.TimeLeft = 10;  
-    startTimer.TotalTime = 1;
+    startTimer.Type = WorldPackets::Misc::StartTimer::TIMER_TYPE_CHALLENGE;
+    startTimer.TotalTime = 10;
+    startTimer.TimeLeft = 10;
     instance->SendToPlayers(startTimer.Write());
 
     SendChallengeModeStart();
@@ -1206,7 +1214,7 @@ void InstanceScript::CompleteChallengeMode()
 
     Map::PlayerList const &players = instance->GetPlayers();
     for (Map::PlayerList::const_iterator itr = players.begin(); itr != players.end(); ++itr)
-        itr->GetSource()->AddChallengeKey(sChallengeModeMgr->GetRandomChallengeId(), _challengeModeLevel + mythicIncrement);
+        itr->GetSource()->AddChallengeKey(sChallengeModeMgr->GetRandomChallengeId(), std::max(_challengeModeLevel + mythicIncrement, 1));
 
     WorldPackets::ChallengeMode::Complete complete;
     complete.Duration = totalDuration;
@@ -1235,6 +1243,9 @@ void InstanceScript::CompleteChallengeMode()
     }
 
     SpawnChallengeModeRewardChest();
+
+    for (Map::PlayerList::const_iterator itr = players.begin(); itr != players.end(); ++itr)
+        sChallengeModeMgr->Reward(itr->GetSource(), _challengeModeLevel);
 }
 
 uint32 InstanceScript::GetChallengeModeCurrentDuration() const

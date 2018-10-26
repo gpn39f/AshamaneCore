@@ -109,6 +109,9 @@ DB2Storage<GarrBuildingEntry>                   sGarrBuildingStore("GarrBuilding
 DB2Storage<GarrBuildingPlotInstEntry>           sGarrBuildingPlotInstStore("GarrBuildingPlotInst.db2", GarrBuildingPlotInstLoadInfo::Instance());
 DB2Storage<GarrClassSpecEntry>                  sGarrClassSpecStore("GarrClassSpec.db2", GarrClassSpecLoadInfo::Instance());
 DB2Storage<GarrFollowerEntry>                   sGarrFollowerStore("GarrFollower.db2", GarrFollowerLoadInfo::Instance());
+DB2Storage<GarrFollowerLevelXPEntry>            sGarrFollowerLevelXPStore("GarrFollowerLevelXP.db2", GarrFollowerLevelXPLoadInfo::Instance());
+DB2Storage<GarrFollowerQualityEntry>            sGarrFollowerQualityStore("GarrFollowerQuality.db2", GarrFollowerQualityLoadInfo::Instance());
+DB2Storage<GarrFollowerTypeEntry>               sGarrFollowerTypeStore("GarrFollowerType.db2", GarrFollowerTypeLoadInfo::Instance());
 DB2Storage<GarrFollowerXAbilityEntry>           sGarrFollowerXAbilityStore("GarrFollowerXAbility.db2", GarrFollowerXAbilityLoadInfo::Instance());
 DB2Storage<GarrMissionEntry>                    sGarrMissionStore("GarrMission.db2", GarrMissionLoadInfo::Instance());
 DB2Storage<GarrPlotBuildingEntry>               sGarrPlotBuildingStore("GarrPlotBuilding.db2", GarrPlotBuildingLoadInfo::Instance());
@@ -168,6 +171,9 @@ DB2Storage<ItemSpecEntry>                       sItemSpecStore("ItemSpec.db2", I
 DB2Storage<ItemSpecOverrideEntry>               sItemSpecOverrideStore("ItemSpecOverride.db2", ItemSpecOverrideLoadInfo::Instance());
 DB2Storage<ItemUpgradeEntry>                    sItemUpgradeStore("ItemUpgrade.db2", ItemUpgradeLoadInfo::Instance());
 DB2Storage<ItemXBonusTreeEntry>                 sItemXBonusTreeStore("ItemXBonusTree.db2", ItemXBonusTreeLoadInfo::Instance());
+DB2Storage<JournalEncounterEntry>               sJournalEncounterStore("JournalEncounter.db2", JournalEncounterLoadInfo::Instance());
+DB2Storage<JournalEncounterItemEntry>           sJournalEncounterItemStore("JournalEncounterItem.db2", JournalEncounterItemLoadInfo::Instance());
+DB2Storage<JournalInstanceEntry>                sJournalInstanceStore("JournalInstance.db2", JournalInstanceLoadInfo::Instance());
 DB2Storage<KeychainEntry>                       sKeychainStore("Keychain.db2", KeychainLoadInfo::Instance());
 DB2Storage<LFGDungeonsEntry>                    sLFGDungeonsStore("LFGDungeons.db2", LfgDungeonsLoadInfo::Instance());
 DB2Storage<LightEntry>                          sLightStore("Light.db2", LightLoadInfo::Instance());
@@ -318,6 +324,9 @@ typedef std::unordered_map<uint32 /*glyphPropertiesId*/, std::vector<uint32>> Gl
 typedef std::unordered_map<uint32 /*bonusListId*/, DB2Manager::ItemBonusList> ItemBonusListContainer;
 typedef std::unordered_map<int16, uint32> ItemBonusListLevelDeltaContainer;
 typedef std::unordered_multimap<uint32 /*itemId*/, uint32 /*bonusTreeId*/> ItemToBonusTreeContainer;
+typedef std::unordered_map<uint32 /*instanceId*/, std::vector<JournalEncounterEntry const*>> JournalEncountersByJournalInstanceContainer;
+typedef std::unordered_map<uint32 /*encounterId*/, std::vector<JournalEncounterItemEntry const*>> ItemsByJournalEncounterContainer;
+typedef std::unordered_map<uint32 /*mapId*/, JournalInstanceEntry const*> JournalInstanceByMapContainer;
 typedef std::unordered_map<uint32 /*itemId*/, ItemChildEquipmentEntry const*> ItemChildEquipmentContainer;
 typedef std::array<ItemClassEntry const*, 19> ItemClassByOldEnumContainer;
 typedef std::unordered_map<uint32, std::vector<ItemLimitCategoryConditionEntry const*>> ItemLimitCategoryConditionContainer;
@@ -378,6 +387,9 @@ namespace
     std::unordered_map<uint32 /*itemLevelSelectorQualitySetId*/, ItemLevelSelectorQualities> _itemLevelQualitySelectorQualities;
     ItemModifiedAppearanceByItemContainer _itemModifiedAppearancesByItem;
     ItemToBonusTreeContainer _itemToBonusTree;
+    JournalEncountersByJournalInstanceContainer _journalEncountersByJournalInstance;
+    ItemsByJournalEncounterContainer _itemsByJournalEncounter;
+    JournalInstanceByMapContainer _journalInstanceByMap;
     ItemSetSpellContainer _itemSetSpells;
     ItemSpecOverridesContainer _itemSpecOverrides;
     DB2Manager::MapDifficultyContainer _mapDifficulties;
@@ -565,6 +577,9 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
     LOAD_DB2(sGarrBuildingPlotInstStore);
     LOAD_DB2(sGarrClassSpecStore);
     LOAD_DB2(sGarrFollowerStore);
+    LOAD_DB2(sGarrFollowerLevelXPStore);
+    LOAD_DB2(sGarrFollowerQualityStore);
+    LOAD_DB2(sGarrFollowerTypeStore);
     LOAD_DB2(sGarrFollowerXAbilityStore);
     LOAD_DB2(sGarrMissionStore);
     LOAD_DB2(sGarrPlotBuildingStore);
@@ -623,6 +638,9 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
     LOAD_DB2(sItemSpecOverrideStore);
     LOAD_DB2(sItemUpgradeStore);
     LOAD_DB2(sItemXBonusTreeStore);
+    LOAD_DB2(sJournalEncounterStore);
+    LOAD_DB2(sJournalEncounterItemStore);
+    LOAD_DB2(sJournalInstanceStore);
     LOAD_DB2(sKeychainStore);
     LOAD_DB2(sLFGDungeonsStore);
     LOAD_DB2(sLightStore);
@@ -924,6 +942,19 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
 
     for (ItemXBonusTreeEntry const* itemBonusTreeAssignment : sItemXBonusTreeStore)
         _itemToBonusTree.insert({ itemBonusTreeAssignment->ItemID, itemBonusTreeAssignment->ItemBonusTreeID });
+
+    for (JournalEncounterEntry const* journalEncounter : sJournalEncounterStore)
+        _journalEncountersByJournalInstance[journalEncounter->JournalInstanceID].push_back(journalEncounter);
+
+    for (JournalEncounterItemEntry const* journalEncounterItem : sJournalEncounterItemStore)
+        _itemsByJournalEncounter[journalEncounterItem->JournalEncounterID].push_back(journalEncounterItem);
+
+    for (JournalInstanceEntry const* journalInstance : sJournalInstanceStore)
+    {
+        if (_journalInstanceByMap.find(journalInstance->MapID) == _journalInstanceByMap.end() ||
+            journalInstance->OrderIndex > _journalInstanceByMap[journalInstance->MapID]->OrderIndex)
+            _journalInstanceByMap[journalInstance->MapID] = journalInstance;
+    }
 
     for (MapDifficultyEntry const* entry : sMapDifficultyStore)
         _mapDifficulties[entry->MapID][entry->DifficultyID] = entry;
@@ -1704,6 +1735,20 @@ std::set<uint32> DB2Manager::GetItemBonusTree(uint32 itemId, uint32 itemContext)
     return bonusListIDs;
 }
 
+bool DB2Manager::HasItemContext(uint32 itemId) const
+{
+    auto itemIdRange = _itemToBonusTree.equal_range(itemId);
+    if (itemIdRange.first == itemIdRange.second)
+        return true;
+
+    return false;
+}
+
+bool DB2Manager::HasItemContext(uint32 itemId, uint32 itemContext) const
+{
+    return !GetItemBonusTree(itemId, itemContext).empty();
+}
+
 std::vector<int32> DB2Manager::GetItemBonusTreeVector(uint32 itemId, uint32 itemBonusTreeMod) const
 {
     std::set<uint32> bonusListIDs = GetItemBonusTree(itemId, itemBonusTreeMod);
@@ -1791,6 +1836,33 @@ std::vector<ItemSpecOverrideEntry const*> const* DB2Manager::GetItemSpecOverride
 {
     auto itr = _itemSpecOverrides.find(itemId);
     if (itr != _itemSpecOverrides.end())
+        return &itr->second;
+
+    return nullptr;
+}
+
+JournalInstanceEntry const* DB2Manager::GetJournalInstanceByMapId(uint32 mapId)
+{
+    auto itr = _journalInstanceByMap.find(mapId);
+    if (itr != _journalInstanceByMap.end())
+        return itr->second;
+
+    return nullptr;
+}
+
+std::vector<JournalEncounterItemEntry const*> const* DB2Manager::GetJournalItemsByEncounter(uint32 encounterId)
+{
+    auto itr = _itemsByJournalEncounter.find(encounterId);
+    if (itr != _itemsByJournalEncounter.end())
+        return &itr->second;
+
+    return nullptr;
+}
+
+std::vector<JournalEncounterEntry const*> const* DB2Manager::GetJournalEncounterByJournalInstanceId(uint32 instanceId)
+{
+    auto itr = _journalEncountersByJournalInstance.find(instanceId);
+    if (itr != _journalEncountersByJournalInstance.end())
         return &itr->second;
 
     return nullptr;

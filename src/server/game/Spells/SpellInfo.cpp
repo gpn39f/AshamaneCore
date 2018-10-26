@@ -627,7 +627,13 @@ int32 SpellEffectInfo::CalcValue(Unit const* caster /*= nullptr*/, int32 const* 
                 GtNpcManaCostScalerEntry const* spellScaler = sNpcManaCostScalerGameTable.GetRow(_spellInfo->SpellLevel);
                 GtNpcManaCostScalerEntry const* casterScaler = sNpcManaCostScalerGameTable.GetRow(caster->getLevel());
                 if (spellScaler && casterScaler)
+                {
+                    if (!caster->IsPlayer())
+                        if (_spellInfo->SpellLevel > caster->getLevel())
+                            value *= float(caster->getLevel()) / float(_spellInfo->SpellLevel);
+
                     value *= casterScaler->Scaler / spellScaler->Scaler;
+                }
             }
         }
     }
@@ -1033,6 +1039,7 @@ SpellInfo::SpellInfo(SpellInfoLoadHelper const& data, SpellEffectEntryMap const&
     RangeIndex = _misc ? _misc->RangeIndex : 0;
     RangeEntry = _misc ? (_misc->RangeIndex ? sSpellRangeStore.LookupEntry(_misc->RangeIndex) : NULL) : NULL;
     Speed = _misc ? _misc->Speed : 0;
+    LaunchDelay = _misc ? _misc->LaunchDelay : 0;
     SchoolMask = _misc ? _misc->SchoolMask : 0;
     AttributesCu = 0;
     IconFileDataId = _misc ? _misc->SpellIconFileDataID : 0;
@@ -1203,6 +1210,17 @@ bool SpellInfo::HasEffect(SpellEffectName effect) const
             if (eff && eff->IsEffect(effect))
                 return true;
         }
+    }
+    return false;
+}
+
+bool SpellInfo::HasAura(uint32 difficulty) const
+{
+    SpellEffectInfoVector effects = GetEffectsForDifficulty(difficulty);
+    for (SpellEffectInfo const* effect : effects)
+    {
+        if (effect && effect->IsAura())
+            return true;
     }
     return false;
 }
@@ -3696,7 +3714,6 @@ std::vector<SpellPowerCost> SpellInfo::CalcPowerCost(Unit const* caster, SpellSc
         costs.reserve(powers.size());
         int32 healthCost = 0;
 
-
         for (SpellPowerEntry const* power : powers)
         {
             if (power->RequiredAuraSpellID && !caster->HasAura(power->RequiredAuraSpellID))
@@ -3849,6 +3866,7 @@ std::vector<SpellPowerCost> SpellInfo::CalcPowerCost(Unit const* caster, SpellSc
                 if (cost.Power == Powers(power->PowerType))
                 {
                     cost.Amount += powerCost;
+                    cost.OptionalAmount += optionalCost;
                     found = true;
                 }
             }
@@ -3858,6 +3876,7 @@ std::vector<SpellPowerCost> SpellInfo::CalcPowerCost(Unit const* caster, SpellSc
                 SpellPowerCost cost;
                 cost.Power = Powers(power->PowerType);
                 cost.Amount = powerCost;
+                cost.OptionalAmount = optionalCost;
                 costs.push_back(cost);
             }
         }
@@ -4306,6 +4325,7 @@ bool SpellInfo::_IsPositiveEffect(uint32 effIndex, bool deep) const
                 case SPELL_AURA_MOD_HEALING_PCT:
                 case SPELL_AURA_MOD_HEALING_DONE:
                 case SPELL_AURA_MOD_DAMAGE_PERCENT_DONE:
+                case SPELL_AURA_MOD_DAMAGE_DONE_BY_PETS_PCT:
                     if (effect->CalcValue() < 0)
                         return false;
                     break;

@@ -23,6 +23,7 @@
 #include "Log.h"
 #include "ObjectMgr.h"
 #include "Timer.h"
+#include <cmath>
 
 namespace
 {
@@ -222,8 +223,8 @@ void AreaTriggerDataStore::LoadAreaTriggerTemplates()
         TC_LOG_INFO("server.loading", ">> Loaded 0 Spell AreaTrigger templates. DB table `spell_areatrigger` is empty.");
     }
 
-    //                                                                  0            1             2                3             4        5                 6
-    if (QueryResult circularMovementInfos = WorldDatabase.Query("SELECT SpellMiscId, CircleRadius, BlendFromRadius, InitialAngle, ZOffset, CounterClockWise, CanLoop FROM `spell_areatrigger_circular` ORDER BY `SpellMiscId`"))
+    //                                                                  0            1           2             3                4             5        6                 7
+    if (QueryResult circularMovementInfos = WorldDatabase.Query("SELECT SpellMiscId, StartDelay, CircleRadius, BlendFromRadius, InitialAngle, ZOffset, CounterClockwise, CanLoop FROM `spell_areatrigger_circular` ORDER BY `SpellMiscId`"))
     {
         do
         {
@@ -231,11 +232,15 @@ void AreaTriggerDataStore::LoadAreaTriggerTemplates()
             uint32 spellMiscId = circularMovementInfoFields[0].GetUInt32();
 
             auto atSpellMiscItr = _areaTriggerTemplateSpellMisc.find(spellMiscId);
-
             if (atSpellMiscItr == _areaTriggerTemplateSpellMisc.end())
+            {
+                TC_LOG_ERROR("sql.sql", "Table `spell_areatrigger_circular` reference invalid SpellMiscId %u", spellMiscId);
                 continue;
+            }
 
             AreaTriggerCircularMovementInfo& circularMovementInfo = atSpellMiscItr->second.CircularMovementInfo;
+
+            circularMovementInfo.StartDelay         = circularMovementInfoFields[1].GetUInt32();
 
 #define VALIDATE_AND_SET_FLOAT(Float, Value) \
             circularMovementInfo.Float = Value; \
@@ -246,15 +251,15 @@ void AreaTriggerDataStore::LoadAreaTriggerTemplates()
                 circularMovementInfo.Float = 0.0f; \
             }
 
-            VALIDATE_AND_SET_FLOAT(Radius,          circularMovementInfoFields[1].GetFloat());
-            VALIDATE_AND_SET_FLOAT(BlendFromRadius, circularMovementInfoFields[2].GetFloat());
-            VALIDATE_AND_SET_FLOAT(InitialAngle,    circularMovementInfoFields[3].GetFloat());
-            VALIDATE_AND_SET_FLOAT(ZOffset,         circularMovementInfoFields[4].GetFloat());
+            VALIDATE_AND_SET_FLOAT(Radius,          circularMovementInfoFields[2].GetFloat());
+            VALIDATE_AND_SET_FLOAT(BlendFromRadius, circularMovementInfoFields[3].GetFloat());
+            VALIDATE_AND_SET_FLOAT(InitialAngle,    circularMovementInfoFields[4].GetFloat());
+            VALIDATE_AND_SET_FLOAT(ZOffset,         circularMovementInfoFields[5].GetFloat());
 
 #undef VALIDATE_AND_SET_FLOAT
 
-            circularMovementInfo.CounterClockWise   = circularMovementInfoFields[5].GetBool();
-            circularMovementInfo.CanLoop            = circularMovementInfoFields[6].GetBool();
+            circularMovementInfo.CounterClockwise   = circularMovementInfoFields[6].GetBool();
+            circularMovementInfo.CanLoop            = circularMovementInfoFields[7].GetBool();
         }
         while (circularMovementInfos->NextRow());
     }
@@ -279,10 +284,10 @@ void AreaTriggerDataStore::LoadAreaTriggers()
     }
 
     // Build single time for check spawnmask
-    std::map<uint32, uint32> spawnMasks;
+    std::map<uint32, uint64> spawnMasks;
     for (auto& mapDifficultyPair : sDB2Manager.GetMapDifficulties())
         for (auto& difficultyPair : mapDifficultyPair.second)
-            spawnMasks[mapDifficultyPair.first] |= (1 << difficultyPair.first);
+            spawnMasks[mapDifficultyPair.first] |= UI64LIT(1) << difficultyPair.first;
 
     do
     {
@@ -297,7 +302,7 @@ void AreaTriggerDataStore::LoadAreaTriggers()
         my_temp.position_y  = fields[index++].GetFloat();
         my_temp.position_z  = fields[index++].GetFloat();
         my_temp.map_id      = fields[index++].GetUInt32();
-        my_temp.spawn_mask  = fields[index++].GetUInt32();
+        my_temp.spawn_mask  = fields[index++].GetUInt64();
         my_temp.scriptId    = sObjectMgr->GetScriptId(fields[index++].GetString());;
 
         MapEntry const* mapEntry = sMapStore.LookupEntry(my_temp.map_id);
@@ -308,8 +313,8 @@ void AreaTriggerDataStore::LoadAreaTriggers()
         }
 
         // Skip spawnMask check for transport maps
-        if (!sObjectMgr->IsTransportMap(my_temp.map_id) && my_temp.spawn_mask & ~spawnMasks[my_temp.spawn_mask])
-            TC_LOG_ERROR("sql.sql", "Table `areatrigger` has areatrigger (GUID: " UI64FMTD ") that have wrong spawn mask %u including unsupported difficulty modes for map (Id: %u).", my_temp.guid, my_temp.spawn_mask, my_temp.map_id);
+        if (!sObjectMgr->IsTransportMap(my_temp.map_id) && my_temp.spawn_mask & ~spawnMasks[my_temp.map_id])
+            TC_LOG_ERROR("sql.sql", "Table `areatrigger` has areatrigger (GUID: " UI64FMTD ") that have wrong spawn mask " UI64FMTD " including unsupported difficulty modes for map (Id: %u, full spawnmask " UI64FMTD ").", my_temp.guid, my_temp.spawn_mask, my_temp.map_id, spawnMasks[my_temp.map_id]);
 
         _areaTriggerData[my_temp.map_id].push_back(my_temp);
 

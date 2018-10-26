@@ -87,8 +87,82 @@ public:
     }
 };
 
+struct questnpc_soul_gem : public ScriptedAI
+{
+    questnpc_soul_gem(Creature* creature) : ScriptedAI(creature) { }
+
+    void Reset() override
+    {
+        CheckForDeadDemons(me);
+    }
+
+    void CheckForDeadDemons(Creature* creature)
+    {
+        if (!creature->GetOwner() || !creature->GetOwner()->IsPlayer())
+            return;
+
+        std::list<Creature*> targets = creature->FindAllCreaturesInRange(15.0f);
+        Player* owner = creature->GetOwner()->ToPlayer();
+
+        for (Creature* target : targets)
+        {
+            if(!target->IsAlive())
+            { 
+                switch (target->GetEntry())
+                {
+                    case 90230:
+                    case 90241:
+                    case 93556:
+                    case 93619:
+                    case 101943:
+                    case 103180:
+                        target->DespawnOrUnsummon();
+                        owner->KilledMonsterCredit(90298);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+};
+
+enum eManaDrainedWhelpling
+{
+    NPC_AZUREWING_WHELPLING = 90336
+};
+
+// 90167
+struct questnpc_mana_drained_whelpling : public ScriptedAI
+{
+    questnpc_mana_drained_whelpling(Creature* creature) : ScriptedAI(creature) { }
+
+    void OnSpellClick(Unit* /*clicker*/, bool& /*result*/) override
+    {
+        me->GetScheduler().Schedule(1s, [](TaskContext context)
+        {
+            Creature* crea = GetContextCreature();
+            crea->UpdateEntry(NPC_AZUREWING_WHELPLING);
+            crea->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+            crea->SetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_STAND_STATE, 0);
+        });
+
+        me->GetScheduler().Schedule(3s, [](TaskContext context)
+        {
+            GetContextCreature()->SetCanFly(true);
+            GetContextCreature()->GetMotionMaster()->MoveTakeoff(0, Position(1162.338135f, 6816.301270f, 236.106567f));
+        });
+
+        me->GetScheduler().Schedule(10s, [](TaskContext context)
+        {
+            GetContextCreature()->DisappearAndDie();
+        });
+    }
+};
 
 void AddSC_azsuna()
 {
     new scene_azsuna_runes();
+    RegisterCreatureAI(questnpc_soul_gem);
+    RegisterCreatureAI(questnpc_mana_drained_whelpling);
 }

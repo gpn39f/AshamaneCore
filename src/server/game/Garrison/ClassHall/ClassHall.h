@@ -32,8 +32,7 @@ public:
     explicit ClassHall(Player* owner);
 
     bool LoadFromDB() override;
-    void SaveToDB(SQLTransaction trans) override;
-    static void DeleteFromDB(ObjectGuid::LowType ownerGuid, SQLTransaction trans);
+    void SaveToDB(SQLTransaction& trans) override;
 
     bool Create(uint32 garrSiteId) override;
     void Delete() override;

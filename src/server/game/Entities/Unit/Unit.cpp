@@ -731,24 +731,22 @@ void Unit::DealDamageMods(Unit const* victim, uint32 &damage, uint32* absorb) co
     if (sWorld->getBoolConfig(CONFIG_LEGACY_BUFF_ENABLED))
         if (IsPlayer() && victim->IsCreature())
             if (GetMapId() != MAP_EBON_HOLD_DK_START_ZONE)
-                damage *= Trinity::GetDamageMultiplierForExpansion(getLevel(), victim->ToCreature()->GetCreatureTemplate()->HealthScalingExpansion);
+                damage *= Trinity::GetDamageMultiplierForExpansion(ToPlayer()->GetEffectiveLevel(), victim->GetLevelForTarget(this));
 }
 
 uint32 Unit::DealDamage(Unit* victim, uint32 damage, CleanDamage const* cleanDamage, DamageEffectType damagetype, SpellSchoolMask damageSchoolMask, SpellInfo const* spellProto, bool durabilityLoss)
 {
     if (victim->IsAIEnabled)
-    {
         victim->GetAI()->DamageTaken(this, damage);
-    }
 
     if (IsAIEnabled)
-    {
         GetAI()->DamageDealt(victim, damage, damagetype);
+
+    if (IsAIEnabled)
         GetAI()->DamageDealt(victim, damage, damagetype, spellProto);
-    }
 
     // Hook for OnDamage Event
-    sScriptMgr->OnDamage(this, victim, damage);
+    sScriptMgr->OnDamage(this, victim, damage, spellProto);
 
     if (victim->IsPlayer() && this != victim)
     {
@@ -1226,7 +1224,7 @@ void Unit::CalculateSpellDamageTaken(SpellNonMeleeDamage* damageInfo, int32 dama
     }
 
     // Script Hook For CalculateSpellDamageTaken -- Allow scripts to change the Damage post class mitigation calculations
-    sScriptMgr->ModifySpellDamageTaken(damageInfo->target, damageInfo->attacker, damage);
+    sScriptMgr->ModifySpellDamageTaken(damageInfo->target, damageInfo->attacker, damage, spellInfo);
 
     // Calculate absorb resist
     if (damage < 0)
@@ -2121,7 +2119,7 @@ MeleeHitOutcome Unit::RollMeleeOutcomeAgainst(Unit const* victim, WeaponAttackTy
     int32    roll = urand(0, 9999);
 
     int32 attackerLevel = GetLevelForTarget(victim);
-    int32 victimLevel = GetLevelForTarget(this);
+    int32 victimLevel = victim->GetLevelForTarget(this);
 
     // check if attack comes from behind, nobody can parry or block if attacker is behind
     bool canParryOrBlock = victim->HasInArc(float(M_PI), this) || victim->HasAuraType(SPELL_AURA_IGNORE_HIT_DIRECTION);
@@ -4168,7 +4166,14 @@ void Unit::RemoveAurasOnEvade()
 
     // don't remove vehicle auras, passengers aren't supposed to drop off the vehicle
     // don't remove clone caster on evade (to be verified)
-    RemoveAllAurasExceptType(SPELL_AURA_CONTROL_VEHICLE, SPELL_AURA_CLONE_CASTER);
+    // don't remove positive auras with SPELL_ATTR3_DEATH_PERSISTENT
+    RemoveAppliedAuras([this](AuraApplication const* aurApp)
+    {
+        Aura const* aura = aurApp->GetBase();
+        return !aura->GetSpellInfo()->HasAura(GetMap()->GetDifficultyID(), SPELL_AURA_CONTROL_VEHICLE)
+            && !aura->GetSpellInfo()->HasAura(GetMap()->GetDifficultyID(), SPELL_AURA_CLONE_CASTER)
+            && (!aurApp->IsPositive() || !aura->GetSpellInfo()->HasAttribute(SPELL_ATTR3_DEATH_PERSISTENT));
+    });
 }
 
 void Unit::RemoveAllAurasOnDeath()
@@ -4708,7 +4713,7 @@ float Unit::GetTotalAuraMultiplier(AuraType auratype, std::function<bool(AuraEff
             // If the Aura Effect does not have this Stack Rule, it returns false so we can add to the multiplier as usual
             if (!sSpellMgr->AddSameEffectStackRuleSpellGroups(aurEff->GetSpellInfo(), aurEff->GetAmount(), sameEffectSpellGroup))
                 if (int32 amount = aurEff->GetAmount())
-                    AddPct(multiplier, aurEff->GetAmount());
+                    AddPct(multiplier, amount);
         }
     }
 
@@ -5145,15 +5150,15 @@ void Unit::RemoveAllGameObjects()
 
 void Unit::_RegisterAreaTrigger(AreaTrigger* areaTrigger)
 {
-    m_areaTrigger.push_back(areaTrigger);
-    if (GetTypeId() == TYPEID_UNIT && IsAIEnabled)
+    m_areaTriggers[areaTrigger->GetGUID()] = areaTrigger->GetSpellId();
+    if (IsCreature() && IsAIEnabled)
         ToCreature()->AI()->JustRegisteredAreaTrigger(areaTrigger);
 }
 
 void Unit::_UnregisterAreaTrigger(AreaTrigger* areaTrigger)
 {
-    m_areaTrigger.erase(std::remove(m_areaTrigger.begin(), m_areaTrigger.end(), areaTrigger));
-    if (GetTypeId() == TYPEID_UNIT && IsAIEnabled)
+    m_areaTriggers.erase(areaTrigger->GetGUID());
+    if (IsCreature() && IsAIEnabled)
         ToCreature()->AI()->JustUnregisteredAreaTrigger(areaTrigger);
 }
 
@@ -5166,48 +5171,51 @@ AreaTrigger* Unit::GetAreaTrigger(uint32 spellId) const
 std::vector<AreaTrigger*> Unit::GetAreaTriggers(uint32 spellId) const
 {
     std::vector<AreaTrigger*> areaTriggers;
-    for (AreaTriggerList::const_iterator i = m_areaTrigger.begin(); i != m_areaTrigger.end(); ++i)
-        if ((*i)->GetSpellId() == spellId)
-            areaTriggers.push_back(*i);
+    for (auto itr : m_areaTriggers)
+        if (itr.second == spellId)
+            if (AreaTrigger* at = ObjectAccessor::GetAreaTrigger(*this, itr.first))
+                areaTriggers.push_back(at);
 
     return areaTriggers;
 }
 
 void Unit::RemoveAreaTrigger(uint32 spellId)
 {
-    if (m_areaTrigger.empty())
+    if (m_areaTriggers.empty())
         return;
-    for (AreaTriggerList::iterator i = m_areaTrigger.begin(); i != m_areaTrigger.end();)
-    {
-        AreaTrigger* areaTrigger = *i;
-        if (areaTrigger->GetSpellId() == spellId)
-        {
-            areaTrigger->Remove();
-            i = m_areaTrigger.begin();
-        }
-        else
-            ++i;
-    }
+
+    auto areatriggers = m_areaTriggers;
+    for (auto itr : areatriggers)
+        if (itr.second == spellId)
+            if (AreaTrigger* areaTrigger = ObjectAccessor::GetAreaTrigger(*this, itr.first))
+                areaTrigger->Remove();
 }
 
 void Unit::RemoveAreaTrigger(AuraEffect const* aurEff)
 {
-    if (m_areaTrigger.empty())
+    if (m_areaTriggers.empty())
         return;
-    for (AreaTrigger* areaTrigger : m_areaTrigger)
+
+    auto areatriggers = m_areaTriggers;
+    for (auto itr : areatriggers)
     {
-        if (areaTrigger->GetAuraEffect() == aurEff)
+        if (AreaTrigger* areaTrigger = ObjectAccessor::GetAreaTrigger(*this, itr.first))
         {
-            areaTrigger->Remove();
-            break; // There can only be one AreaTrigger per AuraEffect
+            if (areaTrigger->GetAuraEffect() == aurEff)
+            {
+                areaTrigger->Remove();
+                break; // There can only be one AreaTrigger per AuraEffect
+            }
         }
     }
 }
 
 void Unit::RemoveAllAreaTriggers()
 {
-    while (!m_areaTrigger.empty())
-        m_areaTrigger.front()->Remove();
+    auto areatriggers = m_areaTriggers;
+    for (auto itr : areatriggers)
+        if (AreaTrigger* at = ObjectAccessor::GetAreaTrigger(*this, itr.first))
+            at->Remove();
 }
 
 void Unit::SendSpellNonMeleeDamageLog(SpellNonMeleeDamage const* log)
@@ -6750,6 +6758,9 @@ float Unit::SpellDamagePctDone(Unit* victim, SpellInfo const* spellProto, Damage
     // Add SPELL_AURA_MOD_DAMAGE_DONE_FOR_MECHANIC percent bonus
     AddPct(DoneTotalMod, GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_DAMAGE_DONE_FOR_MECHANIC, spellProto->Mechanic));
 
+    if (IsPet() && GetOwner())
+        AddPct(DoneTotalMod, GetOwner()->GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_DONE_BY_PETS_PCT, spellProto->GetSchoolMask()));
+
     // Custom scripted damage
     switch (spellProto->SpellFamilyName)
     {
@@ -7461,7 +7472,7 @@ bool Unit::IsImmunedToSpell(SpellInfo const* spellInfo, Unit* caster) const
     {
         SpellInfo const* immuneSpellInfo = sSpellMgr->GetSpellInfo(itr->second);
         if ((itr->first & spellInfo->GetSchoolMask())
-            && !(immuneSpellInfo && immuneSpellInfo->IsPositive() && spellInfo->IsPositive() && IsFriendlyTo(caster))
+            && !(immuneSpellInfo && immuneSpellInfo->IsPositive() && spellInfo->IsPositive() && (caster && IsFriendlyTo(caster)))
             && !spellInfo->CanPierceImmuneAura(immuneSpellInfo))
             return true;
     }
@@ -7598,6 +7609,9 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
 
             DoneTotalMod *= maxModDamagePercentSchool;
         }
+
+        if (IsPet() && GetOwner())
+            AddPct(DoneTotalMod, GetOwner()->GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_DONE_BY_PETS_PCT, spellProto->GetSchoolMask()));
     }
 
     DoneTotalMod *= GetTotalAuraMultiplierByMiscMask(SPELL_AURA_MOD_DAMAGE_DONE_VERSUS, creatureTypeMask);
@@ -7821,7 +7835,7 @@ void Unit::Dismount()
     SendMessageToSet(data.Write(), true);
 
     // dismount as a vehicle
-    if (GetTypeId() == TYPEID_PLAYER && GetVehicleKit())
+    if (IsPlayer() && GetVehicleKit())
     {
         // Remove vehicle from player
         RemoveVehicleKit();
@@ -8051,6 +8065,8 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy)
         (*itr)->SetInCombatState(PvP, enemy);
         (*itr)->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_IN_COMBAT);
     }
+
+    ProcSkillsAndAuras(enemy, PROC_FLAG_ENTER_COMBAT, PROC_FLAG_NONE, PROC_SPELL_TYPE_MASK_ALL, PROC_SPELL_PHASE_NONE, PROC_HIT_NONE, nullptr, nullptr, nullptr);
 }
 
 void Unit::ClearInCombat()
@@ -9374,11 +9390,16 @@ bool Unit::IsInFeralForm() const
 
 bool Unit::IsInDisallowedMountForm() const
 {
-    if (SpellInfo const* transformSpellInfo = sSpellMgr->GetSpellInfo(getTransForm()))
+    return IsDisallowedMountForm(getTransForm(), GetShapeshiftForm(), GetDisplayId());
+}
+
+bool Unit::IsDisallowedMountForm(uint32 spellId, ShapeshiftForm form, uint32 displayId) const
+{
+    if (SpellInfo const* transformSpellInfo = sSpellMgr->GetSpellInfo(spellId))
         if (transformSpellInfo->HasAttribute(SPELL_ATTR0_CASTABLE_WHILE_MOUNTED))
             return false;
 
-    if (ShapeshiftForm form = GetShapeshiftForm())
+    if (form)
     {
         SpellShapeshiftFormEntry const* shapeshift = sSpellShapeshiftFormStore.LookupEntry(form);
         if (!shapeshift)
@@ -9388,10 +9409,10 @@ bool Unit::IsInDisallowedMountForm() const
             return true;
     }
 
-    if (GetDisplayId() == GetNativeDisplayId())
+    if (displayId == GetNativeDisplayId())
         return false;
 
-    CreatureDisplayInfoEntry const* display = sCreatureDisplayInfoStore.LookupEntry(GetDisplayId());
+    CreatureDisplayInfoEntry const* display = sCreatureDisplayInfoStore.LookupEntry(displayId);
     if (!display)
         return true;
 
@@ -10654,7 +10675,7 @@ void Unit::SetDisplayId(uint32 modelId)
         SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, minfo->gender);
 }
 
-void Unit::RestoreDisplayId()
+void Unit::RestoreDisplayId(bool ignorePositiveAurasPreventingMounting /*= false*/)
 {
     AuraEffect* handledAura = NULL;
     // try to receive model from transform auras
@@ -10667,7 +10688,13 @@ void Unit::RestoreDisplayId()
             if (AuraApplication const* aurApp = (*i)->GetBase()->GetApplicationOfTarget(GetGUID()))
             {
                 if (!handledAura)
-                    handledAura = (*i);
+                {
+                    if (!ignorePositiveAurasPreventingMounting)
+                        handledAura = (*i);
+                    else if (CreatureTemplate const* ci = sObjectMgr->GetCreatureTemplate((*i)->GetMiscValue()))
+                        if (!IsDisallowedMountForm((*i)->GetId(), FORM_NONE, sObjectMgr->ChooseDisplayId(ci)))
+                            handledAura = (*i);
+                }
                 // prefer negative auras
                 if (!aurApp->IsPositive())
                 {
@@ -10682,7 +10709,12 @@ void Unit::RestoreDisplayId()
         handledAura->HandleEffect(this, AURA_EFFECT_HANDLE_SEND_FOR_CLIENT, true);
     // we've found shapeshift
     else if (uint32 modelId = GetModelForForm(GetShapeshiftForm()))
-        SetDisplayId(modelId);
+    {
+        if (!ignorePositiveAurasPreventingMounting || !IsDisallowedMountForm(0, GetShapeshiftForm(), modelId))
+            SetDisplayId(modelId);
+        else
+            SetDisplayId(GetNativeDisplayId());
+    }
     // no auras found - set modelid to default
     else
         SetDisplayId(GetNativeDisplayId());
@@ -11288,6 +11320,26 @@ void Unit::Kill(Unit* victim, bool durabilityLoss)
                 if (uint32 lootid = creature->GetCreatureTemplate()->lootid)
                     loot->FillLoot(lootid, LootTemplates_Creature, looter, false, false, creature->GetLootMode());
 
+                if (uint32 journalEncounterId = sObjectMgr->GetCreatureTemplateJournalId(creature->GetCreatureTemplate()->Entry))
+                {
+                    if (auto items = sDB2Manager.GetJournalItemsByEncounter(journalEncounterId))
+                    {
+                        uint8 mapDifficultyMask = GetMap()->GetEncounterDifficultyMask();
+
+                        std::vector<JournalEncounterItemEntry const*> potentialItems;
+                        for (JournalEncounterItemEntry const* item : *items)
+                            if (item->IsValidDifficultyMask(mapDifficultyMask) &&
+                                (sDB2Manager.HasItemContext(item->ItemID, loot->GetItemContext()) ||
+                                 !sDB2Manager.HasItemContext(item->ItemID)))
+                                potentialItems.push_back(item);
+
+                        Trinity::Containers::RandomResize(potentialItems, 2);
+
+                        for (JournalEncounterItemEntry const* item : potentialItems)
+                            loot->AddItem(LootStoreItem(item->ItemID, LOOT_ITEM_TYPE_ITEM, 0, 10, 0, LOOT_MODE_DEFAULT, 0, 1, 1));
+                    }
+                }
+
                 loot->generateMoneyLoot(creature->GetCreatureTemplate()->mingold, creature->GetCreatureTemplate()->maxgold);
 
                 if (group)
@@ -11388,7 +11440,7 @@ void Unit::Kill(Unit* victim, bool durabilityLoss)
             ToCreature()->AI()->KilledUnit(victim);
 
         // Call creature just died function
-        if (creature->IsAIEnabled)
+        if (creature->AI())
             creature->AI()->JustDied(this);
 
         if (TempSummon* summon = creature->ToTempSummon())
@@ -12027,7 +12079,7 @@ void Unit::RemoveVehicleKit(bool onRemoveFromWorld /*= false*/)
     m_vehicleKit->Uninstall();
     delete m_vehicleKit;
 
-    m_vehicleKit = NULL;
+    m_vehicleKit = nullptr;
 
     m_updateFlag &= ~UPDATEFLAG_VEHICLE;
     m_unitTypeMask &= ~UNIT_MASK_VEHICLE;
@@ -12463,6 +12515,10 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
 {
     if (GetTypeId() == TYPEID_PLAYER)
     {
+        // Check if in Cat Form and have Druid of the Flames or Burning Essence aura
+        if ((form == FORM_CAT_FORM) && (HasAura(99245) || HasAura(138927)))
+            return 38150;
+
         if (Aura* artifactAura = GetAura(ARTIFACTS_ALL_WEAPONS_GENERAL_WEAPON_EQUIPPED_PASSIVE))
             if (Item* artifact = ToPlayer()->GetItemByGuid(artifactAura->GetCastItemGUID()))
                 if (ArtifactAppearanceEntry const* artifactAppearance = sArtifactAppearanceStore.LookupEntry(artifact->GetModifier(ITEM_MODIFIER_ARTIFACT_APPEARANCE_ID)))
@@ -12569,7 +12625,7 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
                     }
                 }
                 // Based on Skin color
-                else if (getRace() == RACE_TAUREN || getRace() == RACE_HIGHMOUNTAIN_TAUREN)
+                else if (getRace() == RACE_TAUREN)
                 {
                     uint8 skinColor = GetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_SKIN_ID);
                     if (HasAura(210333)) // Glyph of the Feral Chameleon
@@ -12625,6 +12681,29 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
                             default: // Original - Grey
                                 return 8571;
                         }
+                    }
+                }
+                else if (getRace() == RACE_HIGHMOUNTAIN_TAUREN)
+                {
+                    uint8 skinColor = GetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_SKIN_ID);
+                    if (HasAura(210333)) // Glyph of the Feral Chameleon
+                        skinColor = urand(0, 4);
+
+                    // Highmountain Tauren have only 4 fur colors option :c
+                    switch (skinColor)
+                    {
+                        case 0:
+                            return 80598; // dark brown
+                        case 1:
+                            return 80597; // brown
+                        case 2:
+                            return 80599; // light brown with white horns
+                        case 3:
+                            return 80596; // dark
+                        case 4:
+                        default:
+                            return 80600; // light brown with brown horns (this one possibly bugged)
+
                     }
                 }
                 else if (Player::TeamForRace(getRace()) == ALLIANCE)
@@ -12729,7 +12808,7 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
                     }
                 }
                 // Based on Skin color
-                else if (getRace() == RACE_TAUREN || getRace() == RACE_HIGHMOUNTAIN_TAUREN)
+                else if (getRace() == RACE_TAUREN)
                 {
                     uint8 skinColor = GetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_SKIN_ID);
                     if (HasAura(107059)) // Glyph of the Ursol Chameleon
@@ -12787,6 +12866,28 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
                         }
                     }
                 }
+                else if (getRace() == RACE_HIGHMOUNTAIN_TAUREN)
+                {
+                    uint8 skinColor = GetByteValue(PLAYER_BYTES, PLAYER_BYTES_OFFSET_SKIN_ID);
+                    if (HasAura(107059)) // Glyph of the Ursol Chameleon
+                        skinColor = urand(0, 4);
+
+                    // Highmountain Tauren have only 4 fur colors option :c
+                    switch (skinColor)
+                    {
+                        case 0:
+                            return 80592; // red
+                        case 1:
+                            return 80595; // brown
+                        case 2:
+                            return 80593; // grey
+                        case 3:
+                            return 80591; // dark
+                        case 4:
+                        default:
+                            return 80594; // white
+                    }
+                }
                 else if (Player::TeamForRace(getRace()) == ALLIANCE)
                     return 29415;
                 else
@@ -12802,7 +12903,8 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
                     {
                         case RACE_NIGHTELF: // Blue
                             return 64328;
-                        case RACE_HIGHMOUNTAIN_TAUREN: // TEMP FIX, TODO
+                        case RACE_HIGHMOUNTAIN_TAUREN: // Eagle
+                            return 81439;
                         case RACE_TAUREN: // Brown
                             return 64329;
                         case RACE_WORGEN: // Purple
@@ -12828,7 +12930,7 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
                 {
                     case RACE_NIGHTELF:
                         return 15374;
-                    case RACE_HIGHMOUNTAIN_TAUREN: // TEMP FIX, TODO
+                    case RACE_HIGHMOUNTAIN_TAUREN:
                     case RACE_TAUREN:
                         return 15375;
                     case RACE_WORGEN:
@@ -12859,8 +12961,9 @@ uint32 Unit::GetModelForForm(ShapeshiftForm form) const
                         return 40816;
                     case RACE_TROLL:
                     case RACE_TAUREN:
-                    case RACE_HIGHMOUNTAIN_TAUREN:
                         return 45339;
+                    case RACE_HIGHMOUNTAIN_TAUREN:
+                        return 81440;
                     default:
                         break;
                 }
@@ -13184,6 +13287,15 @@ void Unit::NearTeleportTo(Position const& pos, bool casting /*= false*/)
         UpdatePosition(pos, true);
         UpdateObjectVisibility();
     }
+}
+
+void Unit::NearTeleportTo(uint32 worldSafeLocId, bool casting /*= false*/)
+{
+    WorldSafeLocsEntry const* safeLoc = sWorldSafeLocsStore.LookupEntry(worldSafeLocId);
+    if (safeLoc == nullptr)
+        return;
+
+    NearTeleportTo(safeLoc->Loc.X, safeLoc->Loc.Y, safeLoc->Loc.Z, safeLoc->Facing, casting);
 }
 
 void Unit::SendTeleportPacket(Position const& pos)
@@ -13584,6 +13696,19 @@ bool Unit::SetWalk(bool enable)
     WorldPackets::Movement::MoveSplineSetFlag packet(walkModeTable[enable]);
     packet.MoverGUID = GetGUID();
     SendMessageToSet(packet.Write(), true);
+    return true;
+}
+
+bool Unit::SetFlying(bool enable)
+{
+    if (enable == IsFlying())
+        return false;
+
+    if (enable)
+        AddUnitMovementFlag(MOVEMENTFLAG_FLYING);
+    else
+        RemoveUnitMovementFlag(MOVEMENTFLAG_FLYING);
+
     return true;
 }
 

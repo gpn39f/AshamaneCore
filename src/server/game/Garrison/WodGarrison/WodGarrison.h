@@ -79,8 +79,7 @@ public:
     explicit WodGarrison(Player* owner);
 
     bool LoadFromDB() override;
-    void SaveToDB(SQLTransaction trans) override;
-    static void DeleteFromDB(ObjectGuid::LowType ownerGuid, SQLTransaction trans);
+    void SaveToDB(SQLTransaction& trans) override;
 
     bool Create(uint32 garrSiteId) override;
     bool CanUpgrade(bool checkCost = true);
@@ -104,7 +103,7 @@ public:
     void PlaceBuilding(uint32 garrPlotInstanceId, uint32 garrBuildingId);
     void CancelBuildingConstruction(uint32 garrPlotInstanceId);
     void ActivateBuilding(uint32 garrPlotInstanceId);
-    std::unordered_set<uint32 /*garrBuildingId*/> const& GetKnownBuildings() const { return _knownBuildings; }
+    std::unordered_set<uint32 /*garrBuildingId*/> const& GetKnownBuildings() const;
 
     void SendBuildingLandmarks(Player* receiver) const;
 

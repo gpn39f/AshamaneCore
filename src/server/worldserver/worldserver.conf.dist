@@ -403,7 +403,7 @@ mmap.enablePathFinding = 0
 #
 #    vmap.enableLOS
 #    vmap.enableHeight
-#        Description: VMmap support for line of sight and height calculation.
+#        Description: Vmap support for line of sight and height calculation.
 #        Default:     1 - (Enabled, vmap.enableLOS)
 #                     1 - (Enabled, vmap.enableHeight)
 #                     0 - (Disabled)
@@ -3217,20 +3217,6 @@ PlayerDump.DisallowOverwrite = 1
 UI.ShowQuestLevelsInDialogs = 0
 
 #
-#     Calculate.Creature.Zone.Area.Data
-#        Description: Calculate at loading creature zoneId / areaId and save in creature table (WARNING: SLOW WORLD SERVER STARTUP)
-#        Default:     0  - (Do not show)
-
-Calculate.Creature.Zone.Area.Data = 0
-
-#
-#     Calculate.Gameoject.Zone.Area.Data
-#        Description: Calculate at loading gameobject zoneId / areaId and save in gameobject table (WARNING: SLOW WORLD SERVER STARTUP)
-#        Default:     0  - (Do not show)
-
-Calculate.Gameoject.Zone.Area.Data = 0
-
-#
 #     NoGrayAggro
 #        Description: Gray mobs will not aggro players above/below some levels
 #                     NoGrayAggro.Above: If player is at this level or above, gray mobs will not attack
@@ -3872,7 +3858,8 @@ Appender.Console=1,3,0
 Appender.Server=2,2,0,Server.log,w
 Appender.GM=2,2,15,gm/gm_%s.log
 Appender.DBErrors=2,2,0,DBErrors.log
-Appender.SQLUpdateLog=2,1,16,SQLUpdate.log,w
+#Appender.SQLUpdateLog=2,1,16,SQLUpdate.log,w
+#Appender.GrayLog=4,3,0,"http://0.0.0.0:12201/gelf"
 
 #  Logger config values: Given a logger "name"
 #    Logger.name
@@ -3932,6 +3919,7 @@ Logger.mmaps=3,Server
 #Logger.loot=3,Console Server
 #Logger.maps.script=3,Console Server
 #Logger.maps=3,Console Server
+#Logger.metric=3,GrayLog
 #Logger.misc=3,Console Server
 #Logger.network=3,Console Server
 #Logger.network.opcode=3,Console Server

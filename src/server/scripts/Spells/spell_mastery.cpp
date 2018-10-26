@@ -1,6 +1,19 @@
 /*
-* Ordered alphabetically using scriptname.
-*/
+ * Copyright (C) 2017-2018 AshamaneProject <https://github.com/AshamaneProject>
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation; either version 2 of the License, or (at your
+ * option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
 
 #include "CellImpl.h"
 #include "GridNotifiers.h"
@@ -550,6 +563,55 @@ class spell_mage_mastery_ignite : public AuraScript
     }
 };
 
+// 77220 - Mastery - Chaotic Energy
+class warlock_mastery_chaotic_energy : public PlayerScript
+{
+public:
+    warlock_mastery_chaotic_energy() : PlayerScript("warlock_mastery_chaotic_energy") {}
+
+    enum UsedSpells
+    {
+        SPELL_WARLOCK_CHAOTIC_ENERGIES_MASTERY  = 77220
+    };
+
+    void ModifySpellDamageTaken(Unit* /*target*/, Unit* attacker, int32& damage, SpellInfo const* /*spellInfo*/)
+    {
+        if (Aura* aura = attacker->GetAura(SPELL_WARLOCK_CHAOTIC_ENERGIES_MASTERY))
+        {
+            uint32 const maxDamageImprovePercent = uint32(ceil(float(aura->GetEffect(EFFECT_0)->GetAmount()) / 2.f));
+            AddPct(damage, maxDamageImprovePercent + urand(0, maxDamageImprovePercent));
+        }
+    }
+};
+
+// 115636 - Mastery - Combo Strike
+class monk_mastery_combo_strike : public PlayerScript
+{
+public:
+    monk_mastery_combo_strike() : PlayerScript("monk_mastery_combo_strike") {}
+
+    enum UsedSpells
+    {
+        SPELL_MONK_MASTERY_COMBO_STRIKE = 115636
+    };
+
+    void ModifySpellDamageTaken(Unit* /*target*/, Unit* attacker, int32& damage, SpellInfo const* spellInfo)
+    {
+        if (!spellInfo)
+            return;
+
+        if (Aura* aura = attacker->GetAura(SPELL_MONK_MASTERY_COMBO_STRIKE))
+        {
+            uint32 lastUsedSpellId = attacker->Variables.GetValue<uint32>("monk_mastery_combo_strike", uint32(0));
+            if (lastUsedSpellId != spellInfo->Id)
+            {
+                AddPct(damage, aura->GetEffect(EFFECT_0)->GetAmount());
+                attacker->Variables.Set("monk_mastery_combo_strike", spellInfo->Id);
+            }
+        }
+    }
+};
+
 void AddSC_mastery_spell_scripts()
 {
     new spell_mastery_ignite();
@@ -560,4 +622,7 @@ void AddSC_mastery_spell_scripts()
     RegisterAuraScript(spell_mage_mastery_ignite);
     
     RegisterSpellScript(spell_mastery_icicles_glacial_spike);
+
+    new warlock_mastery_chaotic_energy();
+    new monk_mastery_combo_strike();
 }

@@ -406,12 +406,12 @@ struct ArtifactUnlockLoadInfo
     {
         static DB2FieldMeta const fields[] =
         {
-            { false, FT_INT,   "ID" },
+            { false, FT_INT, "ID" },
             { false, FT_SHORT, "ItemBonusListID" },
-            { false, FT_BYTE,  "PowerRank" },
-            { false, FT_INT,   "PowerID" },
-            { false, FT_INT,   "PlayerConditionID" },
-            { false, FT_BYTE,  "ArtifactID" },
+            { false, FT_BYTE, "PowerRank" },
+            { false, FT_INT, "PowerID" },
+            { false, FT_INT, "PlayerConditionID" },
+            { false, FT_BYTE, "ArtifactID" },
         };
         static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, ArtifactUnlockMeta::Instance(), HOTFIX_SEL_ARTIFACT_UNLOCK);
         return &loadInfo;
@@ -1778,6 +1778,63 @@ struct GarrFollowerLoadInfo
     }
 };
 
+struct GarrFollowerLevelXPLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_SHORT, "XpToNextLevel" },
+            { false, FT_SHORT, "ShipmentXP" },
+            { false, FT_BYTE, "FollowerLevel" },
+            { false, FT_BYTE, "GarrFollowerTypeId" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, GarrFollowerLevelXPMeta::Instance(), HOTFIX_SEL_GARR_FOLLOWER_LEVEL_XP);
+        return &loadInfo;
+    }
+};
+
+struct GarrFollowerQualityLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_INT, "XpToNextQuality" },
+            { false, FT_SHORT, "ShipmentXP" },
+            { false, FT_BYTE, "Quality" },
+            { false, FT_BYTE, "AbilityCount" },
+            { false, FT_BYTE, "TraitCount" },
+            { false, FT_BYTE, "GarrFollowerTypeId" },
+            { false, FT_INT, "ClassSpecId" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, GarrFollowerQualityMeta::Instance(), HOTFIX_SEL_GARR_FOLLOWER_QUALITY);
+        return &loadInfo;
+    }
+};
+
+struct GarrFollowerTypeLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_SHORT, "MaxItemLevel" },
+            { false, FT_BYTE, "MaxFollowers" },
+            { false, FT_BYTE, "MaxFollowerBuildingType" },
+            { false, FT_BYTE, "GarrTypeId" },
+            { false, FT_BYTE, "LevelRangeBias" },
+            { false, FT_BYTE, "ItemLevelRangeBias" },
+            { false, FT_BYTE, "Flags" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, GarrFollowerTypeMeta::Instance(), HOTFIX_SEL_GARR_FOLLOWER_TYPE);
+        return &loadInfo;
+    }
+};
+
 struct GarrFollowerXAbilityLoadInfo
 {
     static DB2LoadInfo const* Instance()
@@ -3025,6 +3082,72 @@ struct ItemXBonusTreeLoadInfo
             { true, FT_INT, "ItemID" },
         };
         static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, ItemXBonusTreeMeta::Instance(), HOTFIX_SEL_ITEM_X_BONUS_TREE);
+        return &loadInfo;
+    }
+};
+
+struct JournalEncounterLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_STRING, "Name" },
+            { false, FT_STRING, "Description" },
+            { false, FT_FLOAT, "Map_1" },
+            { false, FT_FLOAT, "Map_2" },
+            { false, FT_SHORT, "DungeonMapID" },
+            { false, FT_SHORT, "WorldMapAreaID" },
+            { false, FT_SHORT, "FirstSectionID" },
+            { false, FT_SHORT, "JournalInstanceID" },
+            { false, FT_BYTE, "DifficultyMask" },
+            { false, FT_BYTE, "Flags" },
+            { false, FT_INT, "OrderIndex" },
+            { false, FT_INT, "MapDisplayConditionID" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, JournalEncounterMeta::Instance(), HOTFIX_SEL_JOURNAL_ENCOUNTER);
+        return &loadInfo;
+    }
+};
+
+struct JournalEncounterItemLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ItemID" },
+            { false, FT_SHORT, "JournalEncounterID" },
+            { false, FT_BYTE, "DifficultyMask" },
+            { false, FT_BYTE, "FactionMask" },
+            { false, FT_BYTE, "Flags" },
+            { false, FT_INT, "ID" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, JournalEncounterItemMeta::Instance(), HOTFIX_SEL_JOURNAL_ENCOUNTER_ITEM);
+        return &loadInfo;
+    }
+};
+
+struct JournalInstanceLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_STRING, "Name" },
+            { false, FT_STRING, "Description" },
+            { false, FT_INT, "ButtonFileDataID" },
+            { false, FT_INT, "ButtonSmallFileDataID" },
+            { false, FT_INT, "BackgroundFileDataID" },
+            { false, FT_INT, "LoreFileDataID" },
+            { false, FT_SHORT, "MapID" },
+            { false, FT_SHORT, "AreaID" },
+            { false, FT_BYTE, "OrderIndex" },
+            { false, FT_BYTE, "Flags" },
+            { false, FT_INT, "ID" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, JournalInstanceMeta::Instance(), HOTFIX_SEL_JOURNAL_INSTANCE);
         return &loadInfo;
     }
 };

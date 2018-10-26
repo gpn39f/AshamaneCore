@@ -860,7 +860,7 @@ class boss_tectus : public CreatureScript
 
                 for (uint8 l_I = 0; l_I < eMiscs::ShardSpawnCount; ++l_I)
                 {
-                    float orientation = frand(0, 2 * float(M_PI));
+                    float orientation = frand(0.0f, 2.0f * float(M_PI));
                     float l_X = l_OrigX + (l_Range * cos(orientation));
                     float l_Y = l_OrigY + (l_Range * sin(orientation));
 
@@ -1969,15 +1969,12 @@ class spell_highmaul_petrification : public SpellScriptLoader
             {
                 PreventDefaultAction();
 
-                if (Unit* target = GetTarget())
+                if (Unit* l_Attacker = p_EventInfo.GetActor())
                 {
-                    if (Unit* l_Attacker = p_EventInfo.GetActor())
-                    {
-                        if (l_Attacker->GetEntry() != eHighmaulCreatures::Tectus)
-                            return;
+                    if (l_Attacker->GetEntry() != eHighmaulCreatures::Tectus)
+                        return;
 
-                        l_Attacker->CastSpell(l_Attacker, eSpell::Petrification, true);
-                    }
+                    l_Attacker->CastSpell(l_Attacker, eSpell::Petrification, true);
                 }
             }
 

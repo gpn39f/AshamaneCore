@@ -1008,7 +1008,7 @@ public:
         void HandlePeriodic(AuraEffect const* aurEff)
         {
             Unit* caster = aurEff->GetCaster();
-            if (!caster->HasAura(SPELL_DH_BURNING_ALIVE))
+            if (!caster || !caster->HasAura(SPELL_DH_BURNING_ALIVE))
                 return;
 
             WorldObject* owner = GetOwner();
@@ -2735,7 +2735,7 @@ public:
         bool Load() override
         {
             if (Aura* fear = GetAura())
-                fear->Variables.Set("damage", 0);
+                fear->Variables.Set("damage", uint64(0));
             return true;
         }
 
@@ -2745,10 +2745,13 @@ public:
             if (!target)
                 return false;
 
+            if (!eventInfo.GetDamageInfo())
+                return false;
+
             if (Aura* fear = GetAura())
             {
-                uint32 dmg = fear->Variables.GetValue<uint32>("damage");
-                uint32 newdamage = eventInfo.GetDamageInfo()->GetDamage() + dmg;
+                uint64 dmg = fear->Variables.GetValue<uint64>("damage", 0);
+                uint64 newdamage = eventInfo.GetDamageInfo()->GetDamage() + dmg;
                 if (newdamage > target->CountPctFromMaxHealth(10))
                     fear->SetDuration(0);
                 else

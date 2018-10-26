@@ -17,6 +17,7 @@
  */
 
 #include "Object.h"
+#include "AreaTriggerPackets.h"
 #include "AreaTriggerTemplate.h"
 #include "AreaTriggerPackets.h"
 #include "BattlefieldMgr.h"
@@ -448,20 +449,13 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint32 flags) const
         *data << float(unit->GetSpeed(MOVE_TURN_RATE));
         *data << float(unit->GetSpeed(MOVE_PITCH_RATE));
 
-        *data << uint32(0);                                                   // unit->m_movementInfo.forces.size()
+        *data << uint32(unit->GetMovementForces().size());
 
         data->WriteBit(HasSpline);
         data->FlushBits();
 
         for (auto const& itr : unit->GetMovementForces())
-        {
-            *data << itr.first;
-            *data << itr.second.Origin;
-            *data << itr.second.Direction;
-            *data << uint32(itr.second.TransportID);
-            *data << float(itr.second.Magnitude);
-            data->WriteBits(itr.second.Type, 2);
-        }
+            *data << itr.second;
 
         if (HasSpline)
             WorldPackets::Movement::CommonMovement::WriteCreateObjectSplineDataBlock(*unit->movespline, *data);
@@ -551,7 +545,7 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint32 flags) const
         bool hasAreaTriggerPolygon  = areaTriggerTemplate->IsPolygon();
         bool hasAreaTriggerCylinder = areaTriggerTemplate->IsCylinder();
         bool hasAreaTriggerSpline   = areaTrigger->HasSplines();
-        bool hasCircularMovement    = areaTriggerTemplate->HasFlag(AREATRIGGER_FLAG_HAS_CIRCULAR_MOVEMENT);
+        bool hasCircularMovement    = areaTrigger->HasCircularMovement();
 
         data->WriteBit(hasAbsoluteOrientation);
         data->WriteBit(hasDynamicShape);
@@ -649,7 +643,7 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint32 flags) const
         }
 
         if (hasCircularMovement)
-            *data << areaTrigger->GetAreaTriggerCircularMovementInfo();
+            *data << *areaTrigger->GetCircularMovementInfo();
     }
 
     if (HasGameObject)
@@ -1543,6 +1537,8 @@ _dbPhase(0), m_visibleBySummonerOnly(false), m_notifyflags(0), m_executed_notifi
 {
     m_serverSideVisibility.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE | GHOST_VISIBILITY_GHOST);
     m_serverSideVisibilityDetect.SetValue(SERVERSIDE_VISIBILITY_GHOST, GHOST_VISIBILITY_ALIVE);
+
+    m_area = nullptr;
 }
 
 void WorldObject::SetWorldObject(bool on)
@@ -1616,19 +1612,36 @@ void WorldObject::RemoveFromWorld()
     Object::RemoveFromWorld();
 }
 
-uint32 WorldObject::GetZoneId() const
+uint32 WorldObject::GetAreaId() const
 {
-    return GetMap()->GetZoneId(GetPhaseShift(), m_positionX, m_positionY, m_positionZ);
+    if (!GetArea())
+        return GetAreaIdFromPosition();
+
+    return GetArea()->GetId();
 }
 
-uint32 WorldObject::GetAreaId() const
+uint32 WorldObject::GetZoneId() const
+{
+    if (!GetZone())
+        return GetZoneIdFromPosition();
+
+    return GetZone()->GetId();
+}
+
+uint32 WorldObject::GetAreaIdFromPosition() const
 {
     return GetMap()->GetAreaId(GetPhaseShift(), m_positionX, m_positionY, m_positionZ);
 }
 
+uint32 WorldObject::GetZoneIdFromPosition() const
+{
+    return GetMap()->GetZoneId(GetPhaseShift(), m_positionX, m_positionY, m_positionZ);
+}
+
 void WorldObject::GetZoneAndAreaId(uint32& zoneid, uint32& areaid) const
 {
-    GetMap()->GetZoneAndAreaId(GetPhaseShift(), zoneid, areaid, m_positionX, m_positionY, m_positionZ);
+    zoneid = GetZoneId();
+    areaid = GetAreaId();
 }
 
 InstanceScript* WorldObject::GetInstanceScript() const
@@ -2551,6 +2564,7 @@ void Map::SummonCreatureGroup(uint8 group, std::list<TempSummon*>* list /*= NULL
 
 void WorldObject::SetZoneScript()
 {
+    m_zoneScript = nullptr;
     if (Map* map = FindMap())
     {
         if (map->IsDungeon())
@@ -2561,8 +2575,8 @@ void WorldObject::SetZoneScript()
                 m_zoneScript = bf;
             else if (ZoneScript* out = sOutdoorPvPMgr->GetZoneScript(GetZoneId()))
                 m_zoneScript = out;
-            else
-                m_zoneScript = sScriptMgr->GetZoneScript(sObjectMgr->GetScriptIdForZone(GetZoneId()));
+            else if (Area* area = GetArea())
+                m_zoneScript = area->GetZoneScript();
         }
     }
 }

@@ -894,6 +894,16 @@ namespace WorldPackets
             RuneData Runes;
         };
 
+        class AddRunePower final : public ServerPacket
+        {
+        public:
+            AddRunePower() : ServerPacket(SMSG_ADD_RUNE_POWER, 4) { }
+
+            WorldPacket const* Write() override;
+
+            uint32 AddedRunesMask = 0;
+        };
+
         class MissileTrajectoryCollision final : public ClientPacket
         {
         public:
@@ -960,7 +970,7 @@ namespace WorldPackets
             std::vector<int32> FailedSpells;
         };
 
-        class CustomLoadScreen final : public ServerPacket
+        class TC_GAME_API CustomLoadScreen final : public ServerPacket
         {
         public:
             CustomLoadScreen(uint32 teleportSpellId, uint32 loadingScreenId) : ServerPacket(SMSG_CUSTOM_LOAD_SCREEN), TeleportSpellID(teleportSpellId), LoadingScreenID(loadingScreenId) { }

@@ -18,6 +18,7 @@
 
 #include "WorldSession.h"
 #include "AccountMgr.h"
+#include "ArtifactPackets.h"
 #include "AuthenticationPackets.h"
 #include "Battleground.h"
 #include "BattlegroundPackets.h"
@@ -191,10 +192,6 @@ bool LoginQueryHolder::Initialize()
     stmt->setUInt64(0, lowGuid);
     res &= SetPreparedQuery(PLAYER_LOGIN_QUERY_LOAD_GUILD, stmt);
 
-    stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_ARENAINFO);
-    stmt->setUInt64(0, lowGuid);
-    res &= SetPreparedQuery(PLAYER_LOGIN_QUERY_LOAD_ARENA_INFO, stmt);
-
     stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_ACHIEVEMENTS);
     stmt->setUInt64(0, lowGuid);
     res &= SetPreparedQuery(PLAYER_LOGIN_QUERY_LOAD_ACHIEVEMENTS, stmt);
@@ -214,6 +211,10 @@ bool LoginQueryHolder::Initialize()
     stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHAR_CUF_PROFILES);
     stmt->setUInt64(0, lowGuid);
     res &= SetPreparedQuery(PLAYER_LOGIN_QUERY_LOAD_CUF_PROFILES, stmt);
+
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_ARENA_DATA);
+    stmt->setUInt64(0, lowGuid);
+    res &= SetPreparedQuery(PLAYER_LOGIN_QUERY_LOAD_ARENA_DATA, stmt);
 
     stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_BGDATA);
     stmt->setUInt64(0, lowGuid);
@@ -956,6 +957,16 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
     WorldPackets::BattlePet::BattlePetJournalLockAcquired lock;
     SendPacket(lock.Write());
 
+    WorldPackets::Artifact::ArtifactKnowledge artifactKnowledge;
+    artifactKnowledge.ArtifactCategoryID = ARTIFACT_CATEGORY_PRIMARY;
+    artifactKnowledge.KnowledgeLevel = sWorld->getIntConfig(CONFIG_CURRENCY_START_ARTIFACT_KNOWLEDGE);
+    SendPacket(artifactKnowledge.Write());
+
+    WorldPackets::Artifact::ArtifactKnowledge artifactKnowledgeFishingPole;
+    artifactKnowledgeFishingPole.ArtifactCategoryID = ARTIFACT_CATEGORY_FISHING;
+    artifactKnowledgeFishingPole.KnowledgeLevel = 0;
+    SendPacket(artifactKnowledgeFishingPole.Write());
+
     pCurrChar->SendInitialPacketsBeforeAddToMap();
 
     //Show cinematic at the first time that player login
@@ -970,7 +981,30 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
             else if (cEntry->CinematicSequenceID)
                 pCurrChar->SendCinematicStart(cEntry->CinematicSequenceID);
             else if (ChrRacesEntry const* rEntry = sChrRacesStore.LookupEntry(pCurrChar->getRace()))
-                pCurrChar->SendCinematicStart(rEntry->CinematicSequenceID);
+            {
+                if (rEntry->CinematicSequenceID)
+                    pCurrChar->SendCinematicStart(rEntry->CinematicSequenceID);
+                else
+                {
+                    switch (pCurrChar->getRace())
+                    {
+                      case RACE_HIGHMOUNTAIN_TAUREN:
+                            pCurrChar->GetSceneMgr().PlayScene(1901);
+                            break;
+                        case RACE_NIGHTBORNE:
+                            pCurrChar->GetSceneMgr().PlayScene(1900);
+                            break;
+                        case RACE_LIGHTFORGED_DRAENEI:
+                            pCurrChar->GetSceneMgr().PlayScene(1902);
+                            break;
+                        case RACE_VOID_ELF:
+                            pCurrChar->GetSceneMgr().PlayScene(1903);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
 
             // send new char string if not empty
             if (!sWorld->GetNewCharString().empty())
@@ -1972,8 +2006,9 @@ void WorldSession::HandleCharRaceOrFactionChangeCallback(std::shared_ptr<WorldPa
                 case RACE_NIGHTBORNE:           raceLang = 2464;    break;
                 case RACE_VOID_ELF:             raceLang = 2465;    break;
                 default:
-                    ASSERT(false, "Missing race lang skill at character change race/faction");
-                    break;
+                    TC_LOG_ERROR("entities.player", "Could not find language data for race (%u).", factionChangeInfo->RaceID);
+                    SendCharFactionChange(CHAR_CREATE_ERROR, factionChangeInfo.get());
+                    return;
             }
 
             stmt->setUInt16(1, raceLang);
